@@ -62,6 +62,15 @@ class Settings(BaseSettings):
     PLATFORM_INTERNAL_SECRET: str = ""
     PLATFORM_CALLBACK_URL: str = "http://127.0.0.1:9999/api/internal/comfy/callback"
 
+    # 数据标注（SAM3 Annotation Tool）
+    ANNOTATION_TOOL_PATH: str = ""
+    ANNOTATION_LISTEN: str = "127.0.0.1"
+    ANNOTATION_INTERNAL_HOST: str = ""
+    ANNOTATION_PUBLIC_BASE_URL: str = ""
+    ANNOTATION_PORT_RANGE: str = "7860-7899"
+    ANNOTATION_LOG_DIR: str = os.path.join("runtime", "annotation_logs")
+    ANNOTATION_STARTUP_TIMEOUT_SECONDS: int = 60
+
     TORTOISE_ORM: dict = {}
     DATETIME_FORMAT: str = "%Y-%m-%d %H:%M:%S"
 

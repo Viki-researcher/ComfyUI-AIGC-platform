@@ -163,6 +163,10 @@ declare namespace Api {
       comfy_url: string
     }
 
+    interface OpenAnnotationResponse {
+      annotation_url: string
+    }
+
     interface LogCreateParams {
       project_id: number
       timestamp?: string

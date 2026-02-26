@@ -9,10 +9,11 @@ from tortoise.expressions import Q
 from app.core.ctx import CTX_USER_ID
 from app.core.dependency import DependPermission
 from app.models import User
-from app.models.platform import ComfyUIService, Project
+from app.models.platform import AnnotationService, ComfyUIService, Project
 from app.services.comfyui_manager import ensure_comfyui_service, stop_pid
+from app.services.annotation_manager import ensure_annotation_service
 from app.schemas.base import Fail, Success
-from app.schemas.platform import OpenComfyOut, ProjectCreate, ProjectUpdate
+from app.schemas.platform import OpenAnnotationOut, OpenComfyOut, ProjectCreate, ProjectUpdate
 from app.settings.config import settings
 
 router = APIRouter(prefix="/projects", tags=["项目模块"])
@@ -162,6 +163,12 @@ async def delete_project(project_id: int):
     if svc and svc.pid:
         stop_pid(int(svc.pid))
     await ComfyUIService.filter(project_id=project_id).delete()
+
+    ann_svc = await AnnotationService.filter(project_id=project_id).first()
+    if ann_svc and ann_svc.pid:
+        stop_pid(int(ann_svc.pid))
+    await AnnotationService.filter(project_id=project_id).delete()
+
     await Project.filter(id=project_id).delete()
     return Success(msg="Deleted")
 
@@ -189,4 +196,27 @@ async def open_comfy(project_id: int, request: Request):
 
     public_url = _get_public_comfy_url(port=int(svc.port), request=request)
     return Success(data=OpenComfyOut(comfy_url=public_url).model_dump())
+
+
+@router.post("/{project_id}/open_annotation", summary="打开/启动 数据标注服务", dependencies=[DependPermission])
+async def open_annotation(project_id: int, request: Request):
+    user_id = CTX_USER_ID.get()
+    project = await Project.filter(id=project_id).first()
+    if not project:
+        return Fail(code=404, msg="项目不存在")
+
+    if project.owner_user_id != user_id:
+        return Fail(code=403, msg="无操作权限")
+
+    existing = await AnnotationService.filter(project_id=project_id).first()
+    if existing and existing.user_id != user_id:
+        return Fail(code=403, msg="无操作权限")
+
+    try:
+        svc = await ensure_annotation_service(user_id=user_id, project_id=project_id)
+    except Exception as e:  # noqa: BLE001
+        return Fail(code=500, msg=f"启动标注服务失败：{e}")
+
+    public_url = _get_public_comfy_url(port=int(svc.port), request=request)
+    return Success(data=OpenAnnotationOut(annotation_url=public_url).model_dump())
 

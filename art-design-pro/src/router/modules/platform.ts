@@ -21,6 +21,7 @@ export const platformRoutes: AppRouteRecord = {
         authList: [
           { title: '新建项目', authMark: 'project_add' },
           { title: '数据生成', authMark: 'open_comfy' },
+          { title: '数据标注', authMark: 'open_annotation' },
           { title: '编辑项目', authMark: 'project_edit' },
           { title: '删除项目', authMark: 'project_delete' }
         ]

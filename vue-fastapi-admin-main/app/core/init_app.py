@@ -270,6 +270,11 @@ async def ensure_platform_menus():
                     "apis": [{"method": "POST", "path": "/api/projects/{project_id}/open_comfy"}],
                 },
                 {
+                    "title": "数据标注",
+                    "authMark": "open_annotation",
+                    "apis": [{"method": "POST", "path": "/api/projects/{project_id}/open_annotation"}],
+                },
+                {
                     "title": "编辑项目",
                     "authMark": "project_edit",
                     "apis": [{"method": "PUT", "path": "/api/projects/{project_id}"}],

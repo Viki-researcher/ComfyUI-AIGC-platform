@@ -37,3 +37,10 @@ export function fetchOpenComfy(projectId: number) {
   })
 }
 
+export function fetchOpenAnnotation(projectId: number) {
+  return request.post<Api.DataGen.OpenAnnotationResponse>({
+    url: `/api/projects/${projectId}/open_annotation`,
+    showErrorMessage: true
+  })
+}
+

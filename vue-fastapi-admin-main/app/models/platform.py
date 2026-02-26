@@ -30,6 +30,21 @@ class ComfyUIService(BaseModel, TimestampMixin):
         unique_together = ("user_id", "project_id")
 
 
+class AnnotationService(BaseModel, TimestampMixin):
+    user_id = fields.BigIntField(description="用户ID", index=True)
+    project_id = fields.BigIntField(description="项目ID", index=True)
+    port = fields.IntField(description="端口号", index=True)
+    status = fields.CharField(max_length=20, default="online", description="状态(online/offline)", index=True)
+    annotation_url = fields.CharField(max_length=255, description="访问地址")
+    pid = fields.IntField(null=True, description="进程PID", index=True)
+    log_path = fields.CharField(max_length=255, null=True, description="实例日志路径")
+    start_time = fields.DatetimeField(null=True, description="启动时间", index=True)
+
+    class Meta:
+        table = "annotation_services"
+        unique_together = ("user_id", "project_id")
+
+
 class GenerationLog(BaseModel, TimestampMixin):
     user_id = fields.BigIntField(description="用户ID", index=True)
     project_id = fields.BigIntField(description="项目ID", index=True)

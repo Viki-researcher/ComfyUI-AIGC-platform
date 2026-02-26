@@ -31,6 +31,10 @@ class OpenComfyOut(BaseModel):
     comfy_url: str
 
 
+class OpenAnnotationOut(BaseModel):
+    annotation_url: str
+
+
 class GenerationLogCreate(BaseModel):
     project_id: int = Field(..., description="项目ID")
     timestamp: Optional[datetime] = Field(None, description="生成时间(可选，默认当前时间)")

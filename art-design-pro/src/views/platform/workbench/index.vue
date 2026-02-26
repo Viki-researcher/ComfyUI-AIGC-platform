@@ -59,6 +59,15 @@
                 数据生成
               </ElButton>
               <ElButton
+                v-auth="'open_annotation'"
+                type="success"
+                :disabled="p.owner_user_id !== userId"
+                @click="handleOpenAnnotation(p)"
+                v-ripple
+              >
+                数据标注
+              </ElButton>
+              <ElButton
                 v-auth="'project_edit'"
                 :disabled="p.owner_user_id !== userId"
                 @click="openEditDialog(p)"
@@ -108,7 +117,7 @@
 </template>
 
 <script setup lang="ts">
-  import { fetchCreateProject, fetchDeleteProject, fetchGetProjects, fetchOpenComfy, fetchUpdateProject } from '@/api/projects'
+  import { fetchCreateProject, fetchDeleteProject, fetchGetProjects, fetchOpenComfy, fetchOpenAnnotation, fetchUpdateProject } from '@/api/projects'
   import { useUserStore } from '@/store/modules/user'
   import { ElMessageBox } from 'element-plus'
 
@@ -208,6 +217,11 @@
   const handleOpenComfy = async (p: Api.DataGen.Project) => {
     const { comfy_url } = await fetchOpenComfy(p.id)
     window.open(comfy_url, '_blank')
+  }
+
+  const handleOpenAnnotation = async (p: Api.DataGen.Project) => {
+    const { annotation_url } = await fetchOpenAnnotation(p.id)
+    window.open(annotation_url, '_blank')
   }
 
   const handleDelete = async (p: Api.DataGen.Project) => {
