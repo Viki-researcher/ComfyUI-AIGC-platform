@@ -16,8 +16,13 @@ from src.sam3_annotation_tool.view_helpers import (
 # Dynamically load example images from the example_img folder
 EXAMPLE_IMAGES = sorted(glob.glob("example_img/*.jpg") + glob.glob("example_img/*.png") + glob.glob("example_img/*.jpeg"))
 
-# Load models immediately on startup
-load_models()
+# Defer model loading — SAM3 is a gated model that requires HF_TOKEN.
+# The UI will still start; inference will fail gracefully if models are unavailable.
+try:
+    load_models()
+except Exception as e:
+    print(f"⚠️  Model loading skipped: {e}")
+    print("   Set HF_TOKEN env var and ensure access to facebook/sam3 to enable inference.")
 
 app_theme = CustomBlueTheme()
 
