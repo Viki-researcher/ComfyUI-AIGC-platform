@@ -1,0 +1,56 @@
+version: "3.8"
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: data_generation
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./vue-fastapi-admin-main
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_DEFAULT_CONNECTION: postgres
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: data_generation
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LLM_API_BASE_URL: ${LLM_API_BASE_URL:-}
+      LLM_SYSTEM_PROMPT: ${LLM_SYSTEM_PROMPT:-}
+      RAG_ENABLED: "true"
+    volumes:
+      - backend_runtime:/app/runtime
+    ports:
+      - "9999:9999"
+    command: python -m uvicorn app:app --host 0.0.0.0 --port 9999
+
+  frontend:
+    build:
+      context: ./art-design-pro
+      dockerfile: Dockerfile
+    depends_on:
+      - backend
+    ports:
+      - "3006:80"
+
+volumes:
+  pgdata:
+  backend_runtime:
