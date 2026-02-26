@@ -116,10 +116,16 @@
       return (raw.value || []).map((i: any) => ({ key: i.date, count: i.count }))
     }
     if (filters.value.dimension === 'project') {
-      return (raw.value || []).map((i: any) => ({ key: i.project_name ? `项目 ${i.project_name}` : `项目 ${i.project_id}`, count: i.count }))
+      return (raw.value || []).map((i: any) => ({
+        key: i.project_name ? `项目 ${i.project_name}` : `项目 ${i.project_id}`,
+        count: i.count
+      }))
     }
     if (filters.value.dimension === 'user') {
-      return (raw.value || []).map((i: any) => ({ key: i.user_name ? `用户 ${i.user_name}` : `用户 ${i.user_id}`, count: i.count }))
+      return (raw.value || []).map((i: any) => ({
+        key: i.user_name ? `用户 ${i.user_name}` : `用户 ${i.user_id}`,
+        count: i.count
+      }))
     }
     return []
   })
@@ -133,4 +139,3 @@
     padding: 12px;
   }
 </style>
-

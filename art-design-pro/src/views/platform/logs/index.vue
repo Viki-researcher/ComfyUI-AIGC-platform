@@ -53,7 +53,13 @@
       props: { type: 'date', placeholder: '开始日期' },
       span: 6
     },
-    { key: 'end', label: '结束', type: 'date', props: { type: 'date', placeholder: '结束日期' }, span: 6 }
+    {
+      key: 'end',
+      label: '结束',
+      type: 'date',
+      props: { type: 'date', placeholder: '结束日期' },
+      span: 6
+    }
   ])
 
   const columnsFactory = (): ColumnOption<Api.DataGen.LogListItem>[] => [
@@ -101,4 +107,3 @@
     padding: 12px;
   }
 </style>
-

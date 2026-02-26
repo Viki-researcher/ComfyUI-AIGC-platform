@@ -14,4 +14,3 @@ export function fetchGetLogs(params: Partial<Api.DataGen.LogList> & Record<strin
     params
   })
 }
-

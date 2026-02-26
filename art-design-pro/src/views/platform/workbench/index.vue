@@ -17,15 +17,7 @@
 
     <ElCard class="art-table-card" shadow="never">
       <ElRow :gutter="12">
-        <ElCol
-          v-for="p in projects"
-          :key="p.id"
-          :xs="24"
-          :sm="12"
-          :md="8"
-          :lg="6"
-          class="mb-3"
-        >
+        <ElCol v-for="p in projects" :key="p.id" :xs="24" :sm="12" :md="8" :lg="6" class="mb-3">
           <ElCard shadow="hover">
             <template #header>
               <div class="flex-cb">
@@ -108,7 +100,13 @@
 </template>
 
 <script setup lang="ts">
-  import { fetchCreateProject, fetchDeleteProject, fetchGetProjects, fetchOpenComfy, fetchUpdateProject } from '@/api/projects'
+  import {
+    fetchCreateProject,
+    fetchDeleteProject,
+    fetchGetProjects,
+    fetchOpenComfy,
+    fetchUpdateProject
+  } from '@/api/projects'
   import { useUserStore } from '@/store/modules/user'
   import { ElMessageBox } from 'element-plus'
 
@@ -222,4 +220,3 @@
     padding: 12px;
   }
 </style>
-

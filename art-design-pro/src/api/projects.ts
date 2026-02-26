@@ -15,7 +15,10 @@ export function fetchGetProjects(params?: { name?: string; code?: string }) {
   })
 }
 
-export function fetchUpdateProject(projectId: number, params: Partial<Pick<Api.DataGen.Project, 'name' | 'note'>>) {
+export function fetchUpdateProject(
+  projectId: number,
+  params: Partial<Pick<Api.DataGen.Project, 'name' | 'note'>>
+) {
   return request.put<Api.DataGen.Project>({
     url: `/api/projects/${projectId}`,
     params,
@@ -36,4 +39,3 @@ export function fetchOpenComfy(projectId: number) {
     showErrorMessage: true
   })
 }
-

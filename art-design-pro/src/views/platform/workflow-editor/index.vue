@@ -64,7 +64,7 @@
             v-model="workflowJson"
             type="textarea"
             :autosize="{ minRows: 20, maxRows: 40 }"
-            placeholder='粘贴或生成 ComfyUI 工作流 JSON...'
+            placeholder="粘贴或生成 ComfyUI 工作流 JSON..."
             class="json-textarea"
             @change="parseParams"
           />
@@ -154,12 +154,7 @@
 
             <ElFormItem label="采样器">
               <ElSelect v-model="params.samplerName" class="w-full" @change="syncParamsToJson">
-                <ElOption
-                  v-for="s in samplerOptions"
-                  :key="s"
-                  :label="s"
-                  :value="s"
-                />
+                <ElOption v-for="s in samplerOptions" :key="s" :label="s" :value="s" />
               </ElSelect>
             </ElFormItem>
           </ElForm>
@@ -306,9 +301,7 @@
           params.value.height = node.inputs.height ?? params.value.height
         }
         if (node.class_type === 'CLIPTextEncode' && node.inputs?.text) {
-          const samplerNode = Object.values(wf).find(
-            (n: any) => n.class_type === 'KSampler'
-          ) as any
+          const samplerNode = Object.values(wf).find((n: any) => n.class_type === 'KSampler') as any
           if (samplerNode?.inputs) {
             const positiveRef = samplerNode.inputs.positive
             const negativeRef = samplerNode.inputs.negative
