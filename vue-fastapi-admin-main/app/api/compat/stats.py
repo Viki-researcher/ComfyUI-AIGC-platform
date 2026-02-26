@@ -18,10 +18,13 @@ from app.schemas.base import Success
 router = APIRouter(tags=["统计模块"])
 
 
-def _parse_date(s: str) -> datetime:
+def _parse_date(s: str, *, end_of_day: bool = False) -> datetime:
     for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S"):
         try:
-            return datetime.strptime(s, fmt)
+            dt = datetime.strptime(s, fmt)
+            if end_of_day and fmt == "%Y-%m-%d":
+                dt = dt.replace(hour=23, minute=59, second=59)
+            return dt
         except ValueError:
             pass
     raise ValueError("invalid date format")
@@ -40,7 +43,7 @@ async def get_stats(
     if start_date:
         q &= Q(timestamp__gte=_parse_date(start_date))
     if end_date:
-        q &= Q(timestamp__lte=_parse_date(end_date))
+        q &= Q(timestamp__lte=_parse_date(end_date, end_of_day=True))
     if project_id is not None:
         q &= Q(project_id=project_id)
     if user_id is not None:
@@ -97,7 +100,7 @@ async def get_stats_trend(
     if start_date:
         q &= Q(timestamp__gte=_parse_date(start_date))
     if end_date:
-        q &= Q(timestamp__lte=_parse_date(end_date))
+        q &= Q(timestamp__lte=_parse_date(end_date, end_of_day=True))
 
     rows = await GenerationLog.filter(q).order_by("timestamp").all()
 
@@ -145,7 +148,7 @@ async def export_stats(
     if start_date:
         q &= Q(timestamp__gte=_parse_date(start_date))
     if end_date:
-        q &= Q(timestamp__lte=_parse_date(end_date))
+        q &= Q(timestamp__lte=_parse_date(end_date, end_of_day=True))
     if project_id is not None:
         q &= Q(project_id=project_id)
     if user_id is not None:

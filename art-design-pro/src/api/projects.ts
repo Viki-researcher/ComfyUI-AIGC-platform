@@ -33,14 +33,16 @@ export function fetchDeleteProject(projectId: number) {
 export function fetchOpenComfy(projectId: number) {
   return request.post<Api.DataGen.OpenComfyResponse>({
     url: `/api/projects/${projectId}/open_comfy`,
-    showErrorMessage: true
+    timeout: 300000,
+    showErrorMessage: false
   })
 }
 
 export function fetchOpenAnnotation(projectId: number) {
   return request.post<Api.DataGen.OpenAnnotationResponse>({
     url: `/api/projects/${projectId}/open_annotation`,
-    showErrorMessage: true
+    timeout: 120000,
+    showErrorMessage: false
   })
 }
 

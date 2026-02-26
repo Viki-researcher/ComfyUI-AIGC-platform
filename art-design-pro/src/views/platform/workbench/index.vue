@@ -53,6 +53,7 @@
                 v-auth="'open_comfy'"
                 type="primary"
                 :disabled="!canOpenComfy(p)"
+                :loading="comfyLoading === p.id"
                 @click="handleOpenComfy(p)"
                 v-ripple
               >
@@ -62,6 +63,7 @@
                 v-auth="'open_annotation'"
                 type="success"
                 :disabled="p.owner_user_id !== userId"
+                :loading="annotationLoading === p.id"
                 @click="handleOpenAnnotation(p)"
                 v-ripple
               >
@@ -119,7 +121,7 @@
 <script setup lang="ts">
   import { fetchCreateProject, fetchDeleteProject, fetchGetProjects, fetchOpenComfy, fetchOpenAnnotation, fetchUpdateProject } from '@/api/projects'
   import { useUserStore } from '@/store/modules/user'
-  import { ElMessageBox } from 'element-plus'
+  import { ElMessage, ElMessageBox } from 'element-plus'
 
   defineOptions({ name: 'PlatformWorkbench' })
 
@@ -214,14 +216,31 @@
     return p.owner_user_id === userId.value
   }
 
+  const comfyLoading = ref<number | null>(null)
+  const annotationLoading = ref<number | null>(null)
+
   const handleOpenComfy = async (p: Api.DataGen.Project) => {
-    const { comfy_url } = await fetchOpenComfy(p.id)
-    window.open(comfy_url, '_blank')
+    comfyLoading.value = p.id
+    try {
+      const { comfy_url } = await fetchOpenComfy(p.id)
+      window.open(comfy_url, '_blank')
+    } catch (e: any) {
+      ElMessage.error(e?.message || '启动 ComfyUI 服务失败，请检查后端服务配置')
+    } finally {
+      comfyLoading.value = null
+    }
   }
 
   const handleOpenAnnotation = async (p: Api.DataGen.Project) => {
-    const { annotation_url } = await fetchOpenAnnotation(p.id)
-    window.open(annotation_url, '_blank')
+    annotationLoading.value = p.id
+    try {
+      const { annotation_url } = await fetchOpenAnnotation(p.id)
+      window.open(annotation_url, '_blank')
+    } catch (e: any) {
+      ElMessage.error(e?.message || '启动标注服务失败，请检查后端服务配置')
+    } finally {
+      annotationLoading.value = null
+    }
   }
 
   const handleDelete = async (p: Api.DataGen.Project) => {

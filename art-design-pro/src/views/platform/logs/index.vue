@@ -6,7 +6,7 @@
           <div class="text-lg font-semibold">生成日志</div>
           <div class="text-sm text-gray-500">查看所有项目的数据生成记录</div>
         </div>
-        <ElButton type="success" @click="handleExport" v-ripple>导出 Excel</ElButton>
+        <ElButton type="success" :loading="exporting" @click="handleExport" v-ripple>导出 Excel</ElButton>
       </div>
     </ElCard>
 
@@ -111,6 +111,7 @@
   import { useTable } from '@/hooks/core/useTable'
   import { fetchGetLogs, fetchExportLogs } from '@/api/logs'
   import { fetchGetProjects } from '@/api/projects'
+  import { ElMessage } from 'element-plus'
   import type { ColumnOption } from '@/types/component'
 
   defineOptions({ name: 'PlatformLogs' })
@@ -200,14 +201,23 @@
     resetSearchParams()
   }
 
-  const handleExport = () => {
-    fetchExportLogs({
-      user_id: searchForm.value.user_id,
-      project_id: searchForm.value.project_id,
-      status: searchForm.value.status,
-      start: searchForm.value.start,
-      end: searchForm.value.end
-    })
+  const exporting = ref(false)
+  const handleExport = async () => {
+    exporting.value = true
+    try {
+      await fetchExportLogs({
+        user_id: searchForm.value.user_id,
+        project_id: searchForm.value.project_id,
+        status: searchForm.value.status,
+        start: searchForm.value.start,
+        end: searchForm.value.end
+      })
+      ElMessage.success('导出成功')
+    } catch {
+      ElMessage.error('导出失败，请重试')
+    } finally {
+      exporting.value = false
+    }
   }
 </script>
 

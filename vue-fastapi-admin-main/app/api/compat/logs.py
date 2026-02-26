@@ -54,10 +54,13 @@ async def create_log(req_in: GenerationLogCreate):
     )
 
 
-def _parse_dt(s: str) -> datetime:
+def _parse_dt(s: str, *, end_of_day: bool = False) -> datetime:
     for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
         try:
-            return datetime.strptime(s, fmt)
+            dt = datetime.strptime(s, fmt)
+            if end_of_day and fmt == "%Y-%m-%d":
+                dt = dt.replace(hour=23, minute=59, second=59)
+            return dt
         except ValueError:
             pass
     raise ValueError("invalid datetime format")
@@ -80,7 +83,7 @@ def _build_log_query(
     if start:
         q &= Q(timestamp__gte=_parse_dt(start))
     if end:
-        q &= Q(timestamp__lte=_parse_dt(end))
+        q &= Q(timestamp__lte=_parse_dt(end, end_of_day=True))
     return q
 
 

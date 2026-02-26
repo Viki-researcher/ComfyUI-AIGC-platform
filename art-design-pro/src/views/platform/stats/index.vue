@@ -11,13 +11,32 @@
     </ElCard>
 
     <ElCard class="mb-3" shadow="never">
-      <ArtSearchBar
-        v-model="filters"
-        :items="filterItems"
-        :showExpand="false"
-        @search="loadAll"
-        @reset="resetFilters"
-      />
+      <ElRow :gutter="12" class="items-center">
+        <ElCol :xs="24" :sm="12" :md="6">
+          <ElDatePicker
+            v-model="filters.start_date"
+            type="date"
+            placeholder="开始日期"
+            value-format="YYYY-MM-DD"
+            class="w-full"
+          />
+        </ElCol>
+        <ElCol :xs="24" :sm="12" :md="6">
+          <ElDatePicker
+            v-model="filters.end_date"
+            type="date"
+            placeholder="结束日期"
+            value-format="YYYY-MM-DD"
+            class="w-full"
+          />
+        </ElCol>
+        <ElCol :xs="24" :sm="12" :md="6">
+          <div class="flex gap-2">
+            <ElButton type="primary" @click="loadAll" v-ripple>查询</ElButton>
+            <ElButton @click="resetFilters" v-ripple>重置</ElButton>
+          </div>
+        </ElCol>
+      </ElRow>
     </ElCard>
 
     <!-- 按天趋势 -->
@@ -26,12 +45,14 @@
         <div class="font-semibold">每日生成趋势</div>
       </template>
       <ArtLineChart
+        v-if="dayXAxis.length"
         :loading="loading"
         :xAxisData="dayXAxis"
         :data="daySeries"
         height="280px"
         :showAreaColor="true"
       />
+      <ElEmpty v-else description="暂无数据" />
     </ElCard>
 
     <ElRow :gutter="12" class="mb-3">
@@ -116,33 +137,12 @@
   const trendLoading = ref(false)
 
   const filters = ref<{
-    dimension: Api.DataGen.StatsDimension
     start_date?: string
     end_date?: string
   }>({
-    dimension: 'day',
     start_date: undefined,
     end_date: undefined
   })
-
-  const filterItems = computed(() => [
-    {
-      key: 'dimension',
-      label: '维度',
-      type: 'select',
-      props: {
-        placeholder: '请选择',
-        options: [
-          { label: '按天', value: 'day' },
-          { label: '按项目', value: 'project' },
-          { label: '按用户', value: 'user' }
-        ]
-      },
-      span: 6
-    },
-    { key: 'start_date', label: '开始日期', type: 'date', props: { type: 'date' }, span: 6 },
-    { key: 'end_date', label: '结束日期', type: 'date', props: { type: 'date' }, span: 6 }
-  ])
 
   const dayRaw = ref<any[]>([])
   const projectRaw = ref<any[]>([])
@@ -185,7 +185,7 @@
   onMounted(loadAll)
 
   const resetFilters = () => {
-    filters.value = { dimension: 'day', start_date: undefined, end_date: undefined }
+    filters.value = { start_date: undefined, end_date: undefined }
     loadAll()
   }
 
