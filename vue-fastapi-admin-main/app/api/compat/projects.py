@@ -73,6 +73,7 @@ async def create_project(req_in: ProjectCreate):
         name=req_in.name,
         code=req_in.code,
         note=req_in.note,
+        target_count=req_in.target_count,
         owner_user_id=user_id,
     )
     owner = await User.filter(id=user_id).first()
@@ -85,6 +86,10 @@ async def create_project(req_in: ProjectCreate):
             "note": obj.note,
             "owner_user_id": obj.owner_user_id,
             "owner_user_name": owner.username if owner else "",
+            "target_count": obj.target_count,
+            "generated_count": 0,
+            "comfy_status": "stopped",
+            "annotation_status": "stopped",
             "create_time": _now_str(obj.created_at),
             "update_time": _now_str(obj.updated_at),
         }
@@ -106,6 +111,20 @@ async def list_projects(
     owner_ids = list({int(p.owner_user_id) for p in rows if p.owner_user_id is not None})
     owner_rows = await User.filter(id__in=owner_ids).values("id", "username") if owner_ids else []
     owner_map = {int(r["id"]): r["username"] for r in owner_rows}
+
+    from app.models.platform import GenerationLog
+    project_ids = [p.id for p in rows]
+    gen_counts = {}
+    for pid in project_ids:
+        gen_counts[pid] = await GenerationLog.filter(project_id=pid, status="成功").count()
+
+    comfy_map = {}
+    ann_map = {}
+    for svc in await ComfyUIService.filter(project_id__in=project_ids).all():
+        comfy_map[svc.project_id] = svc.status
+    for svc in await AnnotationService.filter(project_id__in=project_ids).all():
+        ann_map[svc.project_id] = svc.status
+
     data = [
         {
             "id": p.id,
@@ -114,6 +133,10 @@ async def list_projects(
             "note": p.note,
             "owner_user_id": p.owner_user_id,
             "owner_user_name": owner_map.get(int(p.owner_user_id), ""),
+            "target_count": p.target_count,
+            "generated_count": gen_counts.get(p.id, 0),
+            "comfy_status": comfy_map.get(p.id, "stopped"),
+            "annotation_status": ann_map.get(p.id, "stopped"),
             "create_time": _now_str(p.created_at),
             "update_time": _now_str(p.updated_at),
         }

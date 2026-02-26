@@ -8,6 +8,7 @@ class Project(BaseModel, TimestampMixin):
     code = fields.CharField(max_length=50, unique=True, description="项目号", index=True)
     note = fields.TextField(null=True, description="备注")
     owner_user_id = fields.BigIntField(description="创建者用户ID", index=True)
+    target_count = fields.IntField(default=1000, description="目标生成数量")
 
     class Meta:
         table = "projects"
