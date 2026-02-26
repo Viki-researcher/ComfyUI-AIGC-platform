@@ -9,6 +9,7 @@ from .server import router as server_router
 from .system import router as system_router
 from .stats import router as stats_router
 from .users import router as users_router
+from .workflow import router as workflow_router
 
 compat_router = APIRouter()
 
@@ -22,6 +23,7 @@ compat_router.include_router(logs_router)
 compat_router.include_router(stats_router)
 compat_router.include_router(server_router)
 compat_router.include_router(chat_router)
+compat_router.include_router(workflow_router)
 
 __all__ = ["compat_router"]
 
