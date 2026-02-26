@@ -1,17 +1,97 @@
 <template>
   <div class="platform-logs art-full-height">
-    <ArtSearchBar
-      v-model="searchForm"
-      :items="searchItems"
-      :showExpand="false"
-      @search="handleSearch"
-      @reset="resetSearchParams"
-    />
+    <ElCard class="mb-3" shadow="never">
+      <div class="flex-cb flex-wrap gap-2">
+        <div>
+          <div class="text-lg font-semibold">生成日志</div>
+          <div class="text-sm text-gray-500">查看所有项目的数据生成记录</div>
+        </div>
+        <ElButton type="success" @click="handleExport" v-ripple>导出 Excel</ElButton>
+      </div>
+    </ElCard>
+
+    <ElCard class="mb-3" shadow="never">
+      <ElRow :gutter="12">
+        <ElCol :xs="24" :sm="12" :md="4">
+          <ElSelect
+            v-model="searchForm.user_id"
+            placeholder="选择用户"
+            clearable
+            filterable
+            class="w-full"
+            @change="handleSearch(searchForm)"
+          >
+            <ElOption
+              v-for="u in userOptions"
+              :key="u.value"
+              :label="u.label"
+              :value="u.value"
+            />
+          </ElSelect>
+        </ElCol>
+        <ElCol :xs="24" :sm="12" :md="4">
+          <ElSelect
+            v-model="searchForm.project_id"
+            placeholder="选择项目"
+            clearable
+            filterable
+            class="w-full"
+            @change="handleSearch(searchForm)"
+          >
+            <ElOption
+              v-for="p in projectOptions"
+              :key="p.value"
+              :label="p.label"
+              :value="p.value"
+            />
+          </ElSelect>
+        </ElCol>
+        <ElCol :xs="24" :sm="12" :md="4">
+          <ElSelect
+            v-model="searchForm.status"
+            placeholder="选择状态"
+            clearable
+            class="w-full"
+            @change="handleSearch(searchForm)"
+          >
+            <ElOption label="成功" value="成功" />
+            <ElOption label="失败" value="失败" />
+            <ElOption label="未知" value="未知" />
+          </ElSelect>
+        </ElCol>
+        <ElCol :xs="24" :sm="12" :md="4">
+          <ElDatePicker
+            v-model="searchForm.start"
+            type="date"
+            placeholder="开始日期"
+            value-format="YYYY-MM-DD"
+            class="w-full"
+            @change="handleSearch(searchForm)"
+          />
+        </ElCol>
+        <ElCol :xs="24" :sm="12" :md="4">
+          <ElDatePicker
+            v-model="searchForm.end"
+            type="date"
+            placeholder="结束日期"
+            value-format="YYYY-MM-DD"
+            class="w-full"
+            @change="handleSearch(searchForm)"
+          />
+        </ElCol>
+        <ElCol :xs="24" :sm="12" :md="4">
+          <div class="flex gap-2">
+            <ElButton type="primary" @click="handleSearch(searchForm)" v-ripple>搜索</ElButton>
+            <ElButton @click="resetSearchForm" v-ripple>重置</ElButton>
+          </div>
+        </ElCol>
+      </ElRow>
+    </ElCard>
 
     <ElCard class="art-table-card" shadow="never">
       <ArtTableHeader :loading="loading" v-model:columns="columnChecks" @refresh="refreshData">
         <template #left>
-          <div class="font-semibold">生成日志</div>
+          <div class="font-semibold">日志列表</div>
         </template>
       </ArtTableHeader>
 
@@ -29,7 +109,8 @@
 
 <script setup lang="ts">
   import { useTable } from '@/hooks/core/useTable'
-  import { fetchGetLogs } from '@/api/logs'
+  import { fetchGetLogs, fetchExportLogs } from '@/api/logs'
+  import { fetchGetProjects } from '@/api/projects'
   import type { ColumnOption } from '@/types/component'
 
   defineOptions({ name: 'PlatformLogs' })
@@ -42,19 +123,32 @@
     end: undefined
   })
 
-  const searchItems = computed(() => [
-    { key: 'user_id', label: '用户ID', type: 'number', props: { placeholder: '可选' }, span: 6 },
-    { key: 'project_id', label: '项目ID', type: 'number', props: { placeholder: '可选' }, span: 6 },
-    { key: 'status', label: '状态', type: 'input', props: { placeholder: '成功/失败' }, span: 6 },
-    {
-      key: 'start',
-      label: '开始',
-      type: 'date',
-      props: { type: 'date', placeholder: '开始日期' },
-      span: 6
-    },
-    { key: 'end', label: '结束', type: 'date', props: { type: 'date', placeholder: '结束日期' }, span: 6 }
-  ])
+  const projectOptions = ref<{ label: string; value: number }[]>([])
+  const userOptions = ref<{ label: string; value: number }[]>([])
+
+  const loadFilterOptions = async () => {
+    try {
+      const projects = await fetchGetProjects()
+      projectOptions.value = (projects || []).map((p: any) => ({
+        label: `${p.name} (${p.code})`,
+        value: p.id
+      }))
+      const userMap = new Map<number, string>()
+      ;(projects || []).forEach((p: any) => {
+        if (p.owner_user_id && p.owner_user_name) {
+          userMap.set(p.owner_user_id, p.owner_user_name)
+        }
+      })
+      userOptions.value = Array.from(userMap.entries()).map(([id, name]) => ({
+        label: name,
+        value: id
+      }))
+    } catch {
+      /* ignore */
+    }
+  }
+
+  onMounted(loadFilterOptions)
 
   const columnsFactory = (): ColumnOption<Api.DataGen.LogListItem>[] => [
     { type: 'index', width: 60, label: '序号' },
@@ -94,6 +188,27 @@
     Object.assign(searchParams, params)
     getData()
   }
+
+  const resetSearchForm = () => {
+    searchForm.value = {
+      user_id: undefined,
+      project_id: undefined,
+      status: undefined,
+      start: undefined,
+      end: undefined
+    }
+    resetSearchParams()
+  }
+
+  const handleExport = () => {
+    fetchExportLogs({
+      user_id: searchForm.value.user_id,
+      project_id: searchForm.value.project_id,
+      status: searchForm.value.status,
+      start: searchForm.value.start,
+      end: searchForm.value.end
+    })
+  }
 </script>
 
 <style scoped>
@@ -101,4 +216,3 @@
     padding: 12px;
   }
 </style>
-

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime
 from io import BytesIO
 from typing import Optional
@@ -85,6 +85,51 @@ async def get_stats(
         data = []
 
     return Success(data=data)
+
+
+@router.get("/stats/trend", summary="时序趋势(按项目/用户)", dependencies=[DependPermission])
+async def get_stats_trend(
+    group_by: str = Query("project", description="分组维度：project/user"),
+    start_date: str | None = Query(None, description="开始日期 YYYY-MM-DD"),
+    end_date: str | None = Query(None, description="结束日期 YYYY-MM-DD"),
+):
+    q = Q()
+    if start_date:
+        q &= Q(timestamp__gte=_parse_date(start_date))
+    if end_date:
+        q &= Q(timestamp__lte=_parse_date(end_date))
+
+    rows = await GenerationLog.filter(q).order_by("timestamp").all()
+
+    dates_set: set[str] = set()
+    series_map: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+
+    if group_by == "project":
+        for r in rows:
+            day = r.timestamp.strftime("%Y-%m-%d")
+            dates_set.add(day)
+            series_map[str(r.project_id)][day] += 1
+        ids = [int(k) for k in series_map.keys()]
+        projects = {p.id: p for p in await Project.filter(id__in=ids).all()} if ids else {}
+        name_map = {str(pid): projects[pid].name if pid in projects else f"项目{pid}" for pid in ids}
+    else:
+        for r in rows:
+            day = r.timestamp.strftime("%Y-%m-%d")
+            dates_set.add(day)
+            series_map[str(r.user_id)][day] += 1
+        ids = [int(k) for k in series_map.keys()]
+        users = {u.id: u for u in await User.filter(id__in=ids).all()} if ids else {}
+        name_map = {str(uid): users[uid].username if uid in users else f"用户{uid}" for uid in ids}
+
+    dates = sorted(dates_set)
+    series = []
+    for key, day_counts in series_map.items():
+        series.append({
+            "name": name_map.get(key, key),
+            "data": [day_counts.get(d, 0) for d in dates],
+        })
+
+    return Success(data={"dates": dates, "series": series})
 
 
 @router.get("/export", summary="导出统计(Excel)", dependencies=[DependPermission])
