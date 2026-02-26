@@ -46,6 +46,13 @@ export interface ChatSendParams {
   max_tokens?: number
   document_ids?: number[]
   enable_rag?: boolean
+  enable_agent?: boolean
+}
+
+export interface RagCitation {
+  document_name: string
+  snippet: string
+  relevance_score: number
 }
 
 /* ─── Providers ──────────────────────────────────── */
@@ -92,14 +99,15 @@ export function fetchMessages(sessionId: number) {
 
 /**
  * SSE 流式发送消息
- * 返回 ReadableStream reader，调用方逐段读取。
+ * Supports both legacy callbacks and new unified onEvent callback.
  */
 export async function streamChat(
   sessionId: number,
   params: ChatSendParams,
   onToken: (text: string) => void,
   onDone: () => void,
-  onError: (msg: string) => void
+  onError: (msg: string) => void,
+  onEvent?: (type: string, data: Record<string, unknown>) => void
 ): Promise<AbortController> {
   const controller = new AbortController()
   const { accessToken } = useUserStore()
@@ -137,6 +145,9 @@ export async function streamChat(
           if (!line.startsWith('data: ')) continue
           try {
             const data = JSON.parse(line.slice(6))
+
+            onEvent?.(data.type, data)
+
             if (data.type === 'token') {
               onToken(data.content)
             } else if (data.type === 'done') {
@@ -156,8 +167,8 @@ export async function streamChat(
         onError(String(err))
       }
     })
-  } catch (err: any) {
-    if (err.name !== 'AbortError') {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name !== 'AbortError') {
       onError(String(err))
     }
   }
@@ -188,4 +199,27 @@ export async function fetchUploadDocument(file: File): Promise<ChatDocument> {
 
 export function fetchDeleteDocument(docId: number) {
   return request.del<null>({ url: `/api/chat/documents/${docId}` })
+}
+
+/* ─── Images ─────────────────────────────────────── */
+
+export async function fetchUploadImage(file: File): Promise<{ url: string; filename: string }> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const { accessToken } = useUserStore()
+
+  const response = await fetch('/api/chat/images/upload', {
+    method: 'POST',
+    headers: { Authorization: accessToken || '' },
+    body: formData
+  })
+  const json = await response.json()
+  if (json.code !== 200) throw new Error(json.msg || '图片上传失败')
+  return json.data
+}
+
+/* ─── Usage ──────────────────────────────────────── */
+
+export function fetchUsage() {
+  return request.get<Record<string, unknown>>({ url: '/api/chat/usage' })
 }
