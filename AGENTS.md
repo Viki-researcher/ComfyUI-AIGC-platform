@@ -14,16 +14,23 @@ This is a **Data Generation Platform** (数据生成平台) monorepo with three 
 
 ### Running the backend
 
-Use SQLite for development (no PostgreSQL needed):
+Default mode uses PostgreSQL. Ensure PostgreSQL is running with `data_generation` database:
 
 ```bash
 cd /workspace/vue-fastapi-admin-main
-DB_DEFAULT_CONNECTION=sqlite \
+DB_DEFAULT_CONNECTION=postgres \
+POSTGRES_HOST=127.0.0.1 POSTGRES_PORT=5432 POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres POSTGRES_DB=data_generation \
 COMFYUI_REPO_PATH=/workspace/ComfyUI-master-fitow \
 COMFYUI_PYTHON=/usr/bin/python3 \
 COMFYUI_FORCE_CPU=true \
+ANNOTATION_TOOL_PATH=/workspace/sam3-annotation-tool \
 PYTHONUNBUFFERED=1 \
 python3 -m uvicorn app:app --host 0.0.0.0 --port 9999
+```
+
+For quick dev without PostgreSQL, use SQLite:
+```bash
+DB_DEFAULT_CONNECTION=sqlite  # ... same other vars
 ```
 
 The backend auto-runs DB migrations and seeds default data on startup, including:
@@ -59,4 +66,5 @@ Detailed setup and deployment docs are in `docs/` (Chinese):
 - `docs/01_环境与依赖安装.md` — Environment and dependency installation
 - `docs/02_PostgreSQL_安装与初始化规范.md` — PostgreSQL setup
 - `docs/03_配置说明_前端后端ComfyUI.md` — Configuration reference
+- `docs/04_SQLite_to_PostgreSQL_迁移说明.md` — SQLite to PostgreSQL migration guide
 - `docs/10_平台启动与停止.md` — Platform start/stop scripts
