@@ -45,9 +45,10 @@ pnpm dev --host 0.0.0.0 --port 3006 --open false
 
 The platform includes an AI chat system. See `docs/llm-chat-config.md` for full configuration. Key points:
 - Configure `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL` env vars before using chat
-- Supports OpenAI / DeepSeek / 通义千问 / Ollama / vLLM (all OpenAI-compatible)
+- Supports multiple LLM providers via OpenAI-compatible protocol (see `docs/llm-chat-config.md`)
 - RAG document upload supports txt/md/pdf/docx
 - Chat SSE endpoint is excluded from audit log middleware to avoid JSON parse errors
+- **Cloud VM network caveat**: Some LLM API endpoints may be unreachable from Cursor Cloud VM (TLS connects but data transfer hangs). OpenAI API works fine. For local dev, all providers should work normally.
 
 ### Gotchas
 

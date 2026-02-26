@@ -94,7 +94,7 @@ def _resolve_config(provider: str = "", model: str = "") -> tuple[LLMProviderCon
 
 def _build_client(cfg: LLMProviderConfig) -> AsyncOpenAI:
     api_key = cfg.api_key or "ollama"
-    return AsyncOpenAI(api_key=api_key, base_url=cfg.base_url, timeout=120)
+    return AsyncOpenAI(api_key=api_key, base_url=cfg.base_url, timeout=60, max_retries=1)
 
 
 async def chat_completion_stream(
