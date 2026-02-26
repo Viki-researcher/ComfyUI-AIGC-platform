@@ -256,6 +256,8 @@ async def ensure_platform_menus():
             remark=remark,
         )
 
+    await ensure_child(name="仪表盘", path="dashboard", order=0, component="/platform/dashboard")
+
     await ensure_child(
         name="个人工作台",
         path="workbench",
@@ -287,9 +289,10 @@ async def ensure_platform_menus():
             ]
         },
     )
-    await ensure_child(name="数据统计", path="stats", order=2, component="/platform/stats")
-    await ensure_child(name="生成日志", path="logs", order=3, component="/platform/logs")
-    await ensure_child(name="服务器监控", path="monitor", order=4, component="/platform/monitor")
+    await ensure_child(name="Prompt助手", path="prompt", order=2, component="/platform/prompt")
+    await ensure_child(name="数据统计", path="stats", order=3, component="/platform/stats")
+    await ensure_child(name="生成日志", path="logs", order=4, component="/platform/logs")
+    await ensure_child(name="服务器监控", path="monitor", order=5, component="/platform/monitor")
 
 
 async def ensure_role_policies():
