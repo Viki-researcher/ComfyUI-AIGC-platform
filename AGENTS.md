@@ -41,6 +41,14 @@ pnpm dev --host 0.0.0.0 --port 3006 --open false
 - **Backend lint**: `cd vue-fastapi-admin-main && source .venv/bin/activate && ruff check ./app`
 - **Backend format**: `cd vue-fastapi-admin-main && source .venv/bin/activate && black ./ && isort ./ --profile black`
 
+### AI Chat / LLM feature
+
+The platform includes an AI chat system. See `docs/llm-chat-config.md` for full configuration. Key points:
+- Configure `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL` env vars before using chat
+- Supports OpenAI / DeepSeek / 通义千问 / Ollama / vLLM (all OpenAI-compatible)
+- RAG document upload supports txt/md/pdf/docx
+- Chat SSE endpoint is excluded from audit log middleware to avoid JSON parse errors
+
 ### Gotchas
 
 - ESLint will fail if `.auto-import.json` does not exist. Running `pnpm dev` briefly (even with a timeout) generates it.
