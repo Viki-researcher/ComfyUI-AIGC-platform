@@ -51,3 +51,15 @@ class DocumentChunk(BaseModel, TimestampMixin):
     class Meta:
         table = "document_chunks"
         ordering = ["chunk_index"]
+
+
+class TokenUsage(BaseModel, TimestampMixin):
+    user_id = fields.BigIntField(description="用户ID", index=True)
+    provider = fields.CharField(max_length=50, default="", description="模型提供商", index=True)
+    model = fields.CharField(max_length=100, default="", description="模型名称", index=True)
+    prompt_tokens = fields.IntField(default=0, description="Prompt Token 数量")
+    completion_tokens = fields.IntField(default=0, description="Completion Token 数量")
+
+    class Meta:
+        table = "token_usage"
+        ordering = ["-created_at"]

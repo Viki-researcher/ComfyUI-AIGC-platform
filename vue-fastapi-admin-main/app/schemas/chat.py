@@ -25,3 +25,4 @@ class ChatSend(BaseModel):
     max_tokens: int | None = None
     document_ids: list[int] = Field(default_factory=list, description="RAG 关联的文档 ID")
     enable_rag: bool = Field(default=False, description="是否启用 RAG 检索")
+    enable_agent: bool = Field(default=False, description="是否启用 Agent 工具调用")
