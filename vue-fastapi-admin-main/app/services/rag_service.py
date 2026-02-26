@@ -2,11 +2,13 @@
 RAG (Retrieval-Augmented Generation) Service
 
 支持文件上传 → 文本提取 → 分块 → 嵌入 → 检索 完整 Pipeline。
-支持 txt / md / pdf / docx 文件类型。
+支持 txt / md / pdf / docx / csv / xlsx / xls / 图片 文件类型。
 """
 
 from __future__ import annotations
 
+import base64
+import csv
 import json
 import os
 from pathlib import Path
@@ -37,6 +39,15 @@ def extract_text_from_file(file_path: str, file_type: str) -> str:
     if ext in ("docx", "doc"):
         return _extract_docx(path)
 
+    if ext == "csv":
+        return _extract_csv(path)
+
+    if ext in ("xlsx", "xls"):
+        return _extract_xlsx(path)
+
+    if ext in ("png", "jpg", "jpeg", "gif", "webp"):
+        return f"Image file: {path.name}"
+
     return path.read_text(encoding="utf-8", errors="replace")
 
 
@@ -55,6 +66,107 @@ def _extract_docx(path: Path) -> str:
     from docx import Document
     doc = Document(str(path))
     return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+
+
+def _extract_csv(path: Path) -> str:
+    """读取 CSV 文件并格式化为 Markdown 表格。"""
+    with path.open(encoding="utf-8", errors="replace", newline="") as f:
+        reader = csv.reader(f)
+        rows = list(reader)
+
+    if not rows:
+        return ""
+
+    return _rows_to_markdown_table(rows)
+
+
+def _extract_xlsx(path: Path) -> str:
+    """读取 xlsx/xls 文件第一个 sheet 并格式化为 Markdown 表格。"""
+    from openpyxl import load_workbook
+    wb = load_workbook(str(path), read_only=True, data_only=True)
+    ws = wb.active
+    if ws is None:
+        wb.close()
+        return ""
+
+    rows = []
+    for row in ws.iter_rows(values_only=True):
+        rows.append([str(cell) if cell is not None else "" for cell in row])
+    wb.close()
+
+    if not rows:
+        return ""
+
+    return _rows_to_markdown_table(rows)
+
+
+def _rows_to_markdown_table(rows: list[list[str]]) -> str:
+    """将行列表转换为 Markdown 表格字符串。"""
+    if not rows:
+        return ""
+
+    header = rows[0]
+    col_count = len(header)
+
+    lines = []
+    lines.append("| " + " | ".join(str(h) for h in header) + " |")
+    lines.append("| " + " | ".join("---" for _ in range(col_count)) + " |")
+
+    for row in rows[1:]:
+        padded = list(row) + [""] * (col_count - len(row))
+        lines.append("| " + " | ".join(str(c) for c in padded[:col_count]) + " |")
+
+    return "\n".join(lines)
+
+
+# ─── 图片描述（多模态 RAG） ─────────────────────────────
+
+async def extract_image_description(file_path: str) -> str:
+    """使用 LLM 视觉能力描述图片内容，失败时回退到文件名。"""
+    path = Path(file_path)
+    filename = path.name
+
+    try:
+        from app.services.llm_client import chat_completion
+
+        image_data = path.read_bytes()
+        b64 = base64.b64encode(image_data).decode("utf-8")
+
+        suffix = path.suffix.lower().lstrip(".")
+        mime_map = {
+            "png": "image/png",
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "gif": "image/gif",
+            "webp": "image/webp",
+        }
+        mime = mime_map.get(suffix, "image/png")
+
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "请详细描述这张图片的内容，包括主要元素、文字、颜色和布局。",
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{mime};base64,{b64}",
+                        },
+                    },
+                ],
+            }
+        ]
+
+        description = await chat_completion(messages)
+        if description and description.strip():
+            return description.strip()
+    except Exception as e:
+        logger.warning(f"[RAG] image description failed for {filename}: {e}")
+
+    return f"Image file: {filename}"
 
 
 # ─── 文本分块 ───────────────────────────────────────────
@@ -92,7 +204,14 @@ async def process_document(doc_id: int) -> None:
         return
 
     try:
-        text = extract_text_from_file(doc.file_path, doc.file_type)
+        ext = doc.file_type.lower()
+
+        # 图片文件使用视觉模型描述
+        if ext in ("png", "jpg", "jpeg", "gif", "webp"):
+            text = await extract_image_description(doc.file_path)
+        else:
+            text = extract_text_from_file(doc.file_path, doc.file_type)
+
         if not text.strip():
             doc.status = "error"
             doc.error_msg = "文件内容为空"
@@ -146,7 +265,7 @@ async def retrieve_relevant_chunks(
     document_ids: list[int] | None = None,
     top_k: int = 0,
 ) -> list[dict]:
-    """根据查询文本检索最相关的文档分块。"""
+    """根据查询文本检索最相关的文档分块，返回含文档名的结果。"""
     if not top_k:
         top_k = settings.RAG_TOP_K
 
@@ -160,14 +279,17 @@ async def retrieve_relevant_chunks(
 
     # 获取用户的所有文档块
     doc_filter = {"user_id": user_id, "status": "ready"}
-    docs = await ChatDocument.filter(**doc_filter).values_list("id", flat=True)
+    docs = await ChatDocument.filter(**doc_filter).all()
     if document_ids:
-        docs = [d for d in docs if d in document_ids]
+        docs = [d for d in docs if d.id in document_ids]
 
     if not docs:
         return []
 
-    chunks = await DocumentChunk.filter(document_id__in=docs).all()
+    doc_name_map = {d.id: d.filename for d in docs}
+    doc_ids = list(doc_name_map.keys())
+
+    chunks = await DocumentChunk.filter(document_id__in=doc_ids).all()
 
     # 向量相似度排序
     scored: list[tuple[float, DocumentChunk]] = []
@@ -188,7 +310,9 @@ async def retrieve_relevant_chunks(
         results.append({
             "chunk_id": chunk.id,
             "document_id": chunk.document_id,
+            "document_name": doc_name_map.get(chunk.document_id, ""),
             "content": chunk.content,
+            "chunk_index": chunk.chunk_index,
             "score": round(score, 4),
         })
     return results
@@ -202,13 +326,16 @@ async def _keyword_search(
 ) -> list[dict]:
     """关键词回退搜索（当嵌入不可用时）。"""
     doc_filter = {"user_id": user_id, "status": "ready"}
-    docs = await ChatDocument.filter(**doc_filter).values_list("id", flat=True)
+    docs = await ChatDocument.filter(**doc_filter).all()
     if document_ids:
-        docs = [d for d in docs if d in document_ids]
+        docs = [d for d in docs if d.id in document_ids]
     if not docs:
         return []
 
-    chunks = await DocumentChunk.filter(document_id__in=docs).all()
+    doc_name_map = {d.id: d.filename for d in docs}
+    doc_ids = list(doc_name_map.keys())
+
+    chunks = await DocumentChunk.filter(document_id__in=doc_ids).all()
     keywords = query.lower().split()
 
     scored = []
@@ -223,11 +350,98 @@ async def _keyword_search(
         {
             "chunk_id": c.id,
             "document_id": c.document_id,
+            "document_name": doc_name_map.get(c.document_id, ""),
             "content": c.content,
+            "chunk_index": c.chunk_index,
             "score": s,
         }
         for s, c in scored[:top_k]
     ]
+
+
+# ─── ComfyUI 文档索引 ──────────────────────────────────
+
+async def index_comfyui_docs(comfyui_repo_path: str) -> int:
+    """扫描 ComfyUI 仓库的文档和代码文件，创建索引。
+
+    只处理尚未索引的文件（按 file_path 去重）。
+    所有条目使用 user_id=0 (系统文档)。
+    返回新创建的 chunk 数量。
+    """
+    repo = Path(comfyui_repo_path)
+    if not repo.is_dir():
+        logger.error(f"[RAG] ComfyUI repo not found: {comfyui_repo_path}")
+        return 0
+
+    target_extensions = {".md", ".txt", ".py"}
+    skip_dirs = {".git", "__pycache__", "node_modules", ".venv", "venv"}
+
+    files_to_index: list[Path] = []
+    for root, dirs, filenames in os.walk(repo):
+        dirs[:] = [d for d in dirs if d not in skip_dirs]
+        for fname in filenames:
+            fpath = Path(root) / fname
+            if fpath.suffix.lower() in target_extensions:
+                files_to_index.append(fpath)
+
+    if not files_to_index:
+        logger.info("[RAG] No indexable files found in ComfyUI repo")
+        return 0
+
+    # 获取已索引的文件路径集合
+    existing_docs = await ChatDocument.filter(user_id=0).values_list("file_path", flat=True)
+    existing_paths = set(existing_docs)
+
+    total_chunks = 0
+
+    for fpath in files_to_index:
+        fpath_str = str(fpath)
+        if fpath_str in existing_paths:
+            continue
+
+        try:
+            ext = fpath.suffix.lower().lstrip(".")
+            text = extract_text_from_file(fpath_str, ext)
+            if not text.strip():
+                continue
+
+            doc = await ChatDocument.create(
+                user_id=0,
+                filename=fpath.name,
+                file_path=fpath_str,
+                file_size=fpath.stat().st_size,
+                file_type=ext,
+                status="processing",
+            )
+
+            chunks = chunk_text(text)
+            for idx, chunk_content in enumerate(chunks):
+                embedding_json = ""
+                try:
+                    from app.services.llm_client import generate_embedding
+                    emb = await generate_embedding(chunk_content[:2000])
+                    embedding_json = json.dumps(emb)
+                except Exception as e:
+                    logger.warning(f"[RAG] embedding failed for {fpath.name} chunk {idx}: {e}")
+
+                await DocumentChunk.create(
+                    document_id=doc.id,
+                    content=chunk_content,
+                    chunk_index=idx,
+                    embedding=embedding_json,
+                )
+
+            doc.chunk_count = len(chunks)
+            doc.status = "ready"
+            await doc.save()
+            total_chunks += len(chunks)
+
+        except Exception as e:
+            logger.warning(f"[RAG] failed to index {fpath}: {e}")
+            continue
+
+    logger.info(f"[RAG] ComfyUI docs indexing complete: {total_chunks} new chunks")
+    return total_chunks
 
 
 def build_rag_context(chunks: list[dict]) -> str:
@@ -236,7 +450,9 @@ def build_rag_context(chunks: list[dict]) -> str:
         return ""
     parts = ["以下是从用户上传的文档中检索到的相关内容，请参考回答：", ""]
     for i, ch in enumerate(chunks, 1):
-        parts.append(f"[文档片段 {i}]")
+        doc_name = ch.get("document_name", "")
+        source_label = f" (来源: {doc_name})" if doc_name else ""
+        parts.append(f"[文档片段 {i}{source_label}]")
         parts.append(ch["content"])
         parts.append("")
     return "\n".join(parts)
