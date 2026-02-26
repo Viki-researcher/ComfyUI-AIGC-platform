@@ -1,86 +1,149 @@
-<!-- 系统聊天窗口 -->
+<!-- AI 对话窗口 — 多会话、流式回复、RAG -->
 <template>
   <div>
-    <ElDrawer v-model="isDrawerVisible" :size="isMobile ? '100%' : '480px'" :with-header="false">
-      <div class="mb-5 flex-cb">
-        <div>
-          <span class="text-base font-medium">Art Bot</span>
-          <div class="mt-1.5 flex-c gap-1">
-            <div
-              class="h-2 w-2 rounded-full"
-              :class="isOnline ? 'bg-success/100' : 'bg-danger/100'"
-            ></div>
-            <span class="text-xs text-g-600">{{ isOnline ? '在线' : '离线' }}</span>
+    <ElDrawer
+      v-model="isDrawerVisible"
+      :size="isMobile ? '100%' : '520px'"
+      :with-header="false"
+      @opened="onDrawerOpened"
+    >
+      <div class="flex h-full flex-col">
+        <!-- ─── 顶部栏 ─── -->
+        <div class="flex-cb border-b-d px-4 py-3">
+          <div class="flex-c gap-2">
+            <span class="text-base font-medium">AI 助手</span>
+            <ElTag v-if="activeSession" size="small" type="info">
+              {{ activeSession.model_name || '未配置模型' }}
+            </ElTag>
+          </div>
+          <div class="flex-c gap-1">
+            <ElTooltip content="新建对话" placement="bottom">
+              <ElIcon class="c-p p-1 hover:text-theme" :size="18" @click="createNewSession">
+                <Plus />
+              </ElIcon>
+            </ElTooltip>
+            <ElTooltip content="管理文档" placement="bottom">
+              <ElIcon class="c-p p-1 hover:text-theme" :size="18" @click="showDocPanel = !showDocPanel">
+                <Document />
+              </ElIcon>
+            </ElTooltip>
+            <ElIcon class="c-p p-1 hover:text-theme" :size="18" @click="closeChat">
+              <Close />
+            </ElIcon>
           </div>
         </div>
-        <div>
-          <ElIcon class="c-p" :size="20" @click="closeChat">
-            <Close />
-          </ElIcon>
-        </div>
-      </div>
-      <div class="flex h-[calc(100%-70px)] flex-col">
-        <!-- 聊天消息区域 -->
-        <div
-          class="flex-1 overflow-y-auto border-t-d px-4 py-7.5 [&::-webkit-scrollbar]:!w-1"
-          ref="messageContainer"
-        >
-          <template v-for="(message, index) in messages" :key="index">
-            <div
-              :class="[
-                'mb-7.5 flex w-full items-start gap-2',
-                message.isMe ? 'flex-row-reverse' : 'flex-row'
-              ]"
+
+        <!-- ─── 会话列表 (折叠区) ─── -->
+        <div v-if="showSessionList" class="max-h-50 overflow-y-auto border-b-d bg-g-100/50">
+          <div
+            v-for="s in sessions"
+            :key="s.id"
+            class="flex-cb cursor-pointer px-4 py-2.5 text-sm transition-colors hover:bg-g-200/60"
+            :class="{ '!bg-theme/10 font-medium': s.id === activeSession?.id }"
+            @click="switchSession(s)"
+          >
+            <span class="flex-1 truncate">{{ s.title }}</span>
+            <ElIcon
+              class="ml-2 shrink-0 text-g-500 hover:text-danger"
+              :size="14"
+              @click.stop="deleteSession(s.id)"
             >
-              <ElAvatar :size="32" :src="message.avatar" class="shrink-0" />
+              <Delete />
+            </ElIcon>
+          </div>
+          <div v-if="sessions.length === 0" class="py-4 text-center text-xs text-g-500">
+            暂无对话，点击 + 创建
+          </div>
+        </div>
+
+        <!-- 会话列表开关 -->
+        <div
+          class="flex-c cursor-pointer gap-1 border-b-d px-4 py-1.5 text-xs text-g-500 hover:text-theme"
+          @click="showSessionList = !showSessionList"
+        >
+          <ElIcon :size="12">
+            <component :is="showSessionList ? ArrowUp : ArrowDown" />
+          </ElIcon>
+          <span>{{ showSessionList ? '收起会话' : `会话列表 (${sessions.length})` }}</span>
+        </div>
+
+        <!-- ─── 文档管理面板 ─── -->
+        <div v-if="showDocPanel" class="max-h-48 overflow-y-auto border-b-d bg-g-50/80 px-4 py-3">
+          <div class="mb-2 flex-cb text-xs">
+            <span class="font-medium">RAG 文档</span>
+            <label class="cursor-pointer text-theme hover:underline">
+              上传文件
+              <input type="file" class="hidden" accept=".txt,.md,.pdf,.docx" @change="handleFileUpload" />
+            </label>
+          </div>
+          <div v-for="doc in documents" :key="doc.id" class="mb-1.5 flex-cb rounded bg-white px-2.5 py-1.5 text-xs">
+            <div class="flex-c gap-1.5 overflow-hidden">
+              <ElIcon :size="14" class="shrink-0 text-g-500"><Document /></ElIcon>
+              <span class="truncate">{{ doc.filename }}</span>
+              <ElTag :type="doc.status === 'ready' ? 'success' : doc.status === 'error' ? 'danger' : 'warning'" size="small">
+                {{ doc.status === 'ready' ? '就绪' : doc.status === 'error' ? '失败' : '处理中' }}
+              </ElTag>
+            </div>
+            <ElIcon class="shrink-0 cursor-pointer text-g-400 hover:text-danger" :size="14" @click="removeDocument(doc.id)">
+              <Delete />
+            </ElIcon>
+          </div>
+          <div v-if="documents.length === 0" class="py-2 text-center text-xs text-g-400">暂无文档</div>
+          <div class="mt-2 flex-c gap-2 text-xs">
+            <ElCheckbox v-model="enableRag" size="small" label="启用 RAG" />
+          </div>
+        </div>
+
+        <!-- ─── 聊天消息区域 ─── -->
+        <div ref="messageContainer" class="flex-1 overflow-y-auto px-4 py-5 [&::-webkit-scrollbar]:!w-1">
+          <template v-if="messages.length === 0 && !isStreaming">
+            <div class="flex h-full flex-col items-center justify-center text-g-400">
+              <ElIcon :size="48" class="mb-3"><ChatDotRound /></ElIcon>
+              <p class="text-sm">开始一段新的对话吧</p>
+            </div>
+          </template>
+
+          <template v-for="(msg, idx) in messages" :key="idx">
+            <div :class="['mb-5 flex w-full items-start gap-2.5', msg.role === 'user' ? 'flex-row-reverse' : 'flex-row']">
               <div
-                :class="['flex max-w-[70%] flex-col', message.isMe ? 'items-end' : 'items-start']"
+                class="flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                :class="msg.role === 'user' ? 'bg-theme' : 'bg-g-600'"
               >
+                {{ msg.role === 'user' ? 'U' : 'AI' }}
+              </div>
+              <div :class="['max-w-[80%]', msg.role === 'user' ? 'text-right' : 'text-left']">
                 <div
                   :class="[
-                    'mb-1 flex gap-2 text-xs',
-                    message.isMe ? 'flex-row-reverse' : 'flex-row'
+                    'inline-block whitespace-pre-wrap rounded-lg px-3.5 py-2.5 text-sm leading-relaxed',
+                    msg.role === 'user' ? 'bg-theme/15 text-g-900' : 'bg-g-200/60 text-g-900'
                   ]"
-                >
-                  <span class="font-medium">{{ message.sender }}</span>
-                  <span class="text-g-600">{{ message.time }}</span>
-                </div>
-                <div
-                  :class="[
-                    'rounded-md px-3.5 py-2.5 text-sm leading-[1.4] text-g-900',
-                    message.isMe ? 'message-right bg-theme/15' : 'message-left bg-g-300/50'
-                  ]"
-                  >{{ message.content }}</div
-                >
+                >{{ msg.content }}<span v-if="isStreaming && idx === messages.length - 1 && msg.role === 'assistant'" class="animate-pulse">▌</span></div>
               </div>
             </div>
           </template>
         </div>
 
-        <!-- 聊天输入区域 -->
-        <div class="px-4 pt-4">
-          <ElInput
-            v-model="messageText"
-            type="textarea"
-            :rows="3"
-            placeholder="输入消息"
-            resize="none"
-            @keyup.enter.prevent="sendMessage"
-          >
-            <template #append>
-              <div class="flex gap-2 py-2">
-                <ElButton :icon="Paperclip" circle plain />
-                <ElButton :icon="Picture" circle plain />
-                <ElButton type="primary" @click="sendMessage" v-ripple>发送</ElButton>
-              </div>
-            </template>
-          </ElInput>
-          <div class="mt-3 flex-cb">
-            <div class="flex-c">
-              <ArtSvgIcon icon="ri:image-line" class="mr-5 c-p text-g-600 text-lg" />
-              <ArtSvgIcon icon="ri:emotion-happy-line" class="mr-5 c-p text-g-600 text-lg" />
-            </div>
-            <ElButton type="primary" @click="sendMessage" v-ripple class="min-w-20">发送</ElButton>
+        <!-- ─── 输入区域 ─── -->
+        <div class="border-t-d px-4 py-3">
+          <div class="flex items-end gap-2">
+            <ElInput
+              v-model="messageText"
+              type="textarea"
+              :rows="2"
+              :autosize="{ minRows: 1, maxRows: 5 }"
+              placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
+              resize="none"
+              :disabled="isStreaming"
+              @keydown="handleKeydown"
+            />
+            <ElButton
+              type="primary"
+              :icon="isStreaming ? Loading : Promotion"
+              :loading="isStreaming"
+              :disabled="!messageText.trim() && !isStreaming"
+              circle
+              @click="isStreaming ? stopStream() : sendMessage()"
+            />
           </div>
         </div>
       </div>
@@ -89,174 +152,224 @@
 </template>
 
 <script setup lang="ts">
-  import { Picture, Paperclip, Close } from '@element-plus/icons-vue'
-  import { mittBus } from '@/utils/sys'
-  import meAvatar from '@/assets/images/avatar/avatar5.webp'
-  import aiAvatar from '@/assets/images/avatar/avatar10.webp'
+import {
+  Close,
+  Plus,
+  Delete,
+  Document,
+  ArrowUp,
+  ArrowDown,
+  Promotion,
+  Loading,
+  ChatDotRound
+} from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { mittBus } from '@/utils/sys'
+import {
+  fetchSessions,
+  fetchCreateSession,
+  fetchDeleteSession,
+  fetchMessages,
+  fetchDocuments,
+  fetchUploadDocument,
+  fetchDeleteDocument,
+  streamChat,
+  type ChatSession,
+  type ChatMessage,
+  type ChatDocument,
+} from '@/api/chat'
 
-  defineOptions({ name: 'ArtChatWindow' })
+defineOptions({ name: 'ArtChatWindow' })
 
-  // 类型定义
-  interface ChatMessage {
-    id: number
-    sender: string
-    content: string
-    time: string
-    isMe: boolean
-    avatar: string
+const MOBILE_BREAKPOINT = 640
+const { width } = useWindowSize()
+const isMobile = computed(() => width.value < MOBILE_BREAKPOINT)
+
+const isDrawerVisible = ref(false)
+const messageText = ref('')
+const messageContainer = ref<HTMLElement | null>(null)
+const isStreaming = ref(false)
+let abortController: AbortController | null = null
+
+const showSessionList = ref(false)
+const showDocPanel = ref(false)
+const enableRag = ref(false)
+
+const sessions = ref<ChatSession[]>([])
+const activeSession = ref<ChatSession | null>(null)
+const messages = ref<ChatMessage[]>([])
+const documents = ref<ChatDocument[]>([])
+
+// ─── 会话管理 ────────────────────────
+
+async function loadSessions() {
+  try {
+    sessions.value = await fetchSessions()
+  } catch {
+    sessions.value = []
   }
+}
 
-  // 常量定义
-  const MOBILE_BREAKPOINT = 640
-  const SCROLL_DELAY = 100
-  const BOT_NAME = 'Art Bot'
-  const USER_NAME = 'Ricky'
+async function createNewSession() {
+  try {
+    const s = await fetchCreateSession({ title: '新对话' })
+    sessions.value.unshift(s)
+    await switchSession(s)
+  } catch (e: any) {
+    ElMessage.error(e.message || '创建失败')
+  }
+}
 
-  // 响应式布局
-  const { width } = useWindowSize()
-  const isMobile = computed(() => width.value < MOBILE_BREAKPOINT)
+async function switchSession(s: ChatSession) {
+  activeSession.value = s
+  showSessionList.value = false
+  try {
+    messages.value = await fetchMessages(s.id)
+  } catch {
+    messages.value = []
+  }
+  scrollToBottom()
+}
 
-  // 组件状态
-  const isDrawerVisible = ref(false)
-  const isOnline = ref(true)
-
-  // 消息相关状态
-  const messageText = ref('')
-  const messageId = ref(10)
-  const messageContainer = ref<HTMLElement | null>(null)
-
-  // 初始化聊天消息数据
-  const initializeMessages = (): ChatMessage[] => [
-    {
-      id: 1,
-      sender: BOT_NAME,
-      content: '你好！我是你的AI助手，有什么我可以帮你的吗？',
-      time: '10:00',
-      isMe: false,
-      avatar: aiAvatar
-    },
-    {
-      id: 2,
-      sender: USER_NAME,
-      content: '我想了解一下系统的使用方法。',
-      time: '10:01',
-      isMe: true,
-      avatar: meAvatar
-    },
-    {
-      id: 3,
-      sender: BOT_NAME,
-      content: '好的，我来为您介绍系统的主要功能。首先，您可以通过左侧菜单访问不同的功能模块...',
-      time: '10:02',
-      isMe: false,
-      avatar: aiAvatar
-    },
-    {
-      id: 4,
-      sender: USER_NAME,
-      content: '听起来很不错，能具体讲讲数据分析部分吗？',
-      time: '10:05',
-      isMe: true,
-      avatar: meAvatar
-    },
-    {
-      id: 5,
-      sender: BOT_NAME,
-      content: '当然可以。数据分析模块可以帮助您实时监控关键指标，并生成详细的报表...',
-      time: '10:06',
-      isMe: false,
-      avatar: aiAvatar
-    },
-    {
-      id: 6,
-      sender: USER_NAME,
-      content: '太好了，那我如何开始使用呢？',
-      time: '10:08',
-      isMe: true,
-      avatar: meAvatar
-    },
-    {
-      id: 7,
-      sender: BOT_NAME,
-      content: '您可以先创建一个项目，然后在项目中添加相关的数据源，系统会自动进行分析。',
-      time: '10:09',
-      isMe: false,
-      avatar: aiAvatar
-    },
-    {
-      id: 8,
-      sender: USER_NAME,
-      content: '明白了，谢谢你的帮助！',
-      time: '10:10',
-      isMe: true,
-      avatar: meAvatar
-    },
-    {
-      id: 9,
-      sender: BOT_NAME,
-      content: '不客气，有任何问题随时联系我。',
-      time: '10:11',
-      isMe: false,
-      avatar: aiAvatar
+async function deleteSession(id: number) {
+  try {
+    await fetchDeleteSession(id)
+    sessions.value = sessions.value.filter((s) => s.id !== id)
+    if (activeSession.value?.id === id) {
+      activeSession.value = sessions.value[0] || null
+      if (activeSession.value) {
+        messages.value = await fetchMessages(activeSession.value.id)
+      } else {
+        messages.value = []
+      }
     }
-  ]
+  } catch (e: any) {
+    ElMessage.error(e.message || '删除失败')
+  }
+}
 
-  const messages = ref<ChatMessage[]>(initializeMessages())
+// ─── 消息发送 ────────────────────────
 
-  // 工具函数
-  const formatCurrentTime = (): string => {
-    return new Date().toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+async function sendMessage() {
+  const text = messageText.value.trim()
+  if (!text || isStreaming.value) return
+
+  if (!activeSession.value) {
+    await createNewSession()
+    if (!activeSession.value) return
   }
 
-  const scrollToBottom = (): void => {
-    nextTick(() => {
-      setTimeout(() => {
-        if (messageContainer.value) {
-          messageContainer.value.scrollTop = messageContainer.value.scrollHeight
-        }
-      }, SCROLL_DELAY)
-    })
-  }
+  messages.value.push({ id: 0, role: 'user', content: text, created_at: '' })
+  messageText.value = ''
+  scrollToBottom()
 
-  // 消息处理方法
-  const sendMessage = (): void => {
-    const text = messageText.value.trim()
-    if (!text) return
+  messages.value.push({ id: 0, role: 'assistant', content: '', created_at: '' })
+  isStreaming.value = true
 
-    const newMessage: ChatMessage = {
-      id: messageId.value++,
-      sender: USER_NAME,
+  const assistantIdx = messages.value.length - 1
+  const docIds = enableRag.value ? documents.value.filter((d) => d.status === 'ready').map((d) => d.id) : []
+
+  abortController = await streamChat(
+    activeSession.value.id,
+    {
       content: text,
-      time: formatCurrentTime(),
-      isMe: true,
-      avatar: meAvatar
+      enable_rag: enableRag.value && docIds.length > 0,
+      document_ids: docIds
+    },
+    (token) => {
+      messages.value[assistantIdx].content += token
+      scrollToBottom()
+    },
+    () => {
+      isStreaming.value = false
+      loadSessions()
+    },
+    (errMsg) => {
+      isStreaming.value = false
+      if (!messages.value[assistantIdx].content) {
+        messages.value[assistantIdx].content = `⚠️ ${errMsg}`
+      }
     }
+  )
+}
 
-    messages.value.push(newMessage)
-    messageText.value = ''
-    scrollToBottom()
+function stopStream() {
+  abortController?.abort()
+  isStreaming.value = false
+}
+
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
+    sendMessage()
   }
+}
 
-  // 聊天窗口控制方法
-  const openChat = (): void => {
-    isDrawerVisible.value = true
-    scrollToBottom()
+// ─── 文档管理 ────────────────────────
+
+async function loadDocuments() {
+  try {
+    documents.value = await fetchDocuments()
+  } catch {
+    documents.value = []
   }
+}
 
-  const closeChat = (): void => {
-    isDrawerVisible.value = false
+async function handleFileUpload(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  input.value = ''
+  try {
+    const doc = await fetchUploadDocument(file)
+    documents.value.unshift(doc)
+    ElMessage.success('文件上传成功，正在处理...')
+    setTimeout(loadDocuments, 5000)
+  } catch (err: any) {
+    ElMessage.error(err.message || '上传失败')
   }
+}
 
-  // 生命周期
-  onMounted(() => {
-    scrollToBottom()
-    mittBus.on('openChat', openChat)
+async function removeDocument(id: number) {
+  try {
+    await fetchDeleteDocument(id)
+    documents.value = documents.value.filter((d) => d.id !== id)
+  } catch (e: any) {
+    ElMessage.error(e.message || '删除失败')
+  }
+}
+
+// ─── UI helpers ──────────────────────
+
+function scrollToBottom() {
+  nextTick(() => {
+    setTimeout(() => {
+      if (messageContainer.value) {
+        messageContainer.value.scrollTop = messageContainer.value.scrollHeight
+      }
+    }, 50)
   })
+}
 
-  onUnmounted(() => {
-    mittBus.off('openChat', openChat)
-  })
+async function onDrawerOpened() {
+  await Promise.all([loadSessions(), loadDocuments()])
+  if (sessions.value.length > 0 && !activeSession.value) {
+    await switchSession(sessions.value[0])
+  }
+  scrollToBottom()
+}
+
+function openChat() {
+  isDrawerVisible.value = true
+}
+function closeChat() {
+  isDrawerVisible.value = false
+}
+
+onMounted(() => {
+  mittBus.on('openChat', openChat)
+})
+onUnmounted(() => {
+  mittBus.off('openChat', openChat)
+})
 </script>

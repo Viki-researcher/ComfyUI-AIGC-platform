@@ -62,6 +62,32 @@ class Settings(BaseSettings):
     PLATFORM_INTERNAL_SECRET: str = ""
     PLATFORM_CALLBACK_URL: str = "http://127.0.0.1:9999/api/internal/comfy/callback"
 
+    # ===== LLM / AI Chat 配置 =====
+    # 默认 LLM 提供商: openai / deepseek / tongyi / ollama / custom
+    LLM_PROVIDER: str = "openai"
+    LLM_API_KEY: str = ""
+    LLM_API_BASE_URL: str = ""
+    LLM_MODEL: str = "gpt-4o-mini"
+    LLM_MAX_TOKENS: int = 4096
+    LLM_TEMPERATURE: float = 0.7
+    LLM_SYSTEM_PROMPT: str = "你是菲特数据生成平台的AI助手，请用中文回答用户问题。"
+
+    # 多提供商预设 (JSON 字符串，启动时解析)
+    LLM_PROVIDERS_JSON: str = "[]"
+
+    # Embedding 配置 (RAG 用)
+    EMBEDDING_PROVIDER: str = ""
+    EMBEDDING_API_KEY: str = ""
+    EMBEDDING_API_BASE_URL: str = ""
+    EMBEDDING_MODEL: str = "text-embedding-3-small"
+
+    # RAG 配置
+    RAG_ENABLED: bool = True
+    RAG_CHUNK_SIZE: int = 500
+    RAG_CHUNK_OVERLAP: int = 50
+    RAG_TOP_K: int = 3
+    RAG_UPLOAD_DIR: str = os.path.join("runtime", "chat_uploads")
+
     TORTOISE_ORM: dict = {}
     DATETIME_FORMAT: str = "%Y-%m-%d %H:%M:%S"
 

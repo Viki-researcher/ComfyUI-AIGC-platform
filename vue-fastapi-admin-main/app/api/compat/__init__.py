@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from .auth import router as auth_router
+from .chat import router as chat_router
 from .logs import router as logs_router
 from .projects import router as projects_router
 from .roles import router as roles_router
@@ -20,6 +21,7 @@ compat_router.include_router(projects_router)
 compat_router.include_router(logs_router)
 compat_router.include_router(stats_router)
 compat_router.include_router(server_router)
+compat_router.include_router(chat_router)
 
 __all__ = ["compat_router"]
 
