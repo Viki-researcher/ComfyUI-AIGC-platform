@@ -336,12 +336,17 @@ async def _keyword_search(
     doc_ids = list(doc_name_map.keys())
 
     chunks = await DocumentChunk.filter(document_id__in=doc_ids).all()
-    keywords = query.lower().split()
+    import re
+    keywords = [w for w in re.split(r'[\s,，。？！?!、；;：:]+', query.lower()) if len(w) >= 2]
+    if not keywords:
+        keywords = [query.lower().strip()]
 
     scored = []
     for chunk in chunks:
         content_lower = chunk.content.lower()
         score = sum(1 for kw in keywords if kw in content_lower)
+        if score == 0:
+            score = 1 if query.lower()[:6] in content_lower else 0
         if score > 0:
             scored.append((score, chunk))
 

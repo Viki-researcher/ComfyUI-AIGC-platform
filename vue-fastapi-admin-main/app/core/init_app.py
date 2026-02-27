@@ -49,6 +49,7 @@ def make_middlewares():
                 "/api/chat/documents/",
                 "/api/chat/images/",
                 "/api/chat/reports/",
+                "/api/chat/skills/",
                 "/docs",
                 "/openapi.json",
             ],
