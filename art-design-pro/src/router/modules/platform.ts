@@ -56,6 +56,18 @@ export const platformRoutes: AppRouteRecord = {
       name: 'PlatformMonitor',
       component: '/platform/monitor',
       meta: { title: '服务器监控', keepAlive: true }
+    },
+    {
+      path: 'workflow',
+      name: 'PlatformWorkflow',
+      component: '/platform/workflow-editor',
+      meta: { title: '工作流编辑器', keepAlive: true }
+    },
+    {
+      path: 'usage',
+      name: 'PlatformUsage',
+      component: '/platform/usage',
+      meta: { title: '用量与计费', keepAlive: true }
     }
   ]
 }

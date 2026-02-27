@@ -15,7 +15,10 @@ export function fetchGetProjects(params?: { name?: string; code?: string }) {
   })
 }
 
-export function fetchUpdateProject(projectId: number, params: Partial<Pick<Api.DataGen.Project, 'name' | 'note'>>) {
+export function fetchUpdateProject(
+  projectId: number,
+  params: Partial<Pick<Api.DataGen.Project, 'name' | 'note' | 'target_count'>>
+) {
   return request.put<Api.DataGen.Project>({
     url: `/api/projects/${projectId}`,
     params,
@@ -45,4 +48,3 @@ export function fetchOpenAnnotation(projectId: number) {
     showErrorMessage: false
   })
 }
-
