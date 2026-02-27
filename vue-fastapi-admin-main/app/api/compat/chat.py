@@ -160,7 +160,16 @@ async def send_message(session_id: int, body: ChatSend, user: User = Depends(Aut
     if body.enable_agent:
         async def agent_event_generator():
             if rag_citations:
-                yield f"data: {json.dumps({'type': 'rag_citations', 'citations': rag_citations}, ensure_ascii=False)}\n\n"
+                mapped_citations = [
+                    {
+                        "document_name": c.get("document_name", ""),
+                        "snippet": (c.get("content", ""))[:150] + ("..." if len(c.get("content", "")) > 150 else ""),
+                        "relevance_score": c.get("score", 0),
+                        "chunk_index": c.get("chunk_index", 0),
+                    }
+                    for c in rag_citations
+                ]
+                yield f"data: {json.dumps({'type': 'rag_citations', 'citations': mapped_citations}, ensure_ascii=False)}\n\n"
 
             full_reply = ""
             try:
@@ -197,7 +206,16 @@ async def send_message(session_id: int, body: ChatSend, user: User = Depends(Aut
 
     async def event_generator():
         if rag_citations:
-            yield f"data: {json.dumps({'type': 'rag_citations', 'citations': rag_citations}, ensure_ascii=False)}\n\n"
+            mapped_citations = [
+                {
+                    "document_name": c.get("document_name", ""),
+                    "snippet": (c.get("content", ""))[:150] + ("..." if len(c.get("content", "")) > 150 else ""),
+                    "relevance_score": c.get("score", 0),
+                    "chunk_index": c.get("chunk_index", 0),
+                }
+                for c in rag_citations
+            ]
+            yield f"data: {json.dumps({'type': 'rag_citations', 'citations': mapped_citations}, ensure_ascii=False)}\n\n"
 
         full_reply = ""
         try:
@@ -400,6 +418,47 @@ async def download_report(filename: str, _user: User = Depends(AuthControl.is_au
     if not file_path.exists() or not file_path.is_file():
         return Fail(msg="报告文件不存在")
     return FileResponse(str(file_path), filename=filename)
+
+
+# ─── Skills ──────────────────────────────────────────────
+
+
+@router.get("/skills", summary="获取可用技能列表")
+async def list_skills(_user: User = Depends(AuthControl.is_authed)):
+    from app.services.skills_config import get_skills
+
+    return Success(data=get_skills())
+
+
+@router.post("/skills/{skill_id}/run", summary="执行技能")
+async def run_skill(skill_id: str, body: ChatSend, user: User = Depends(AuthControl.is_authed)):
+    from app.services.skills_config import build_skill_messages
+
+    skill_messages = build_skill_messages(skill_id, body.content)
+    if not skill_messages:
+        return Fail(msg=f"技能不存在: {skill_id}")
+
+    provider = body.model_provider or settings.LLM_PROVIDER
+    model = body.model_name or settings.LLM_MODEL
+
+    async def skill_generator():
+        full_reply = ""
+        try:
+            async for token in chat_completion_stream(
+                messages=skill_messages,
+                provider=provider,
+                model=model,
+                temperature=body.temperature,
+                max_tokens=body.max_tokens,
+            ):
+                full_reply += token
+                yield f"data: {json.dumps({'type': 'token', 'content': token}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'content': ''}, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            logger.error(f"[Skill] error: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'content': f'技能执行失败: {str(e)[:200]}'}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(skill_generator(), media_type="text/event-stream")
 
 
 # ─── Helpers ─────────────────────────────────────────────

@@ -109,59 +109,76 @@
           <span>{{ showSessionList ? '收起会话' : `会话列表 (${sessions.length})` }}</span>
         </div>
 
-        <!-- ─── 文档管理面板 ─── -->
-        <div v-if="showDocPanel" class="max-h-48 overflow-y-auto border-b-d bg-g-50/80 px-4 py-3">
-          <div class="mb-2 flex-cb text-xs">
-            <span class="font-medium">RAG 文档</span>
-            <label class="cursor-pointer text-theme hover:underline">
-              上传文件
-              <input
-                type="file"
-                class="hidden"
-                accept=".txt,.md,.pdf,.docx"
-                @change="handleFileUpload"
-              />
-            </label>
-          </div>
-          <div
-            v-for="doc in documents"
-            :key="doc.id"
-            class="mb-1.5 flex-cb rounded bg-white px-2.5 py-1.5 text-xs"
-          >
-            <div class="flex-c gap-1.5 overflow-hidden">
-              <ElIcon :size="14" class="shrink-0 text-g-500"><Document /></ElIcon>
-              <span class="truncate">{{ doc.filename }}</span>
-              <ElTag
-                :type="
-                  doc.status === 'ready' ? 'success' : doc.status === 'error' ? 'danger' : 'warning'
-                "
-                size="small"
-              >
-                {{ doc.status === 'ready' ? '就绪' : doc.status === 'error' ? '失败' : '处理中' }}
-              </ElTag>
+        <!-- ─── 文档管理面板 (collapsible) ─── -->
+        <div v-if="showDocPanel" class="border-b-d bg-g-50/80">
+          <!-- Header: always visible, has upload + collapse toggle -->
+          <div class="flex-cb px-4 py-2 text-xs">
+            <div class="flex-c gap-2">
+              <span class="font-medium">RAG 文档 ({{ documents.length }})</span>
+              <ElCheckbox v-model="enableRag" size="small">启用 RAG</ElCheckbox>
             </div>
-            <div class="flex-c gap-1">
+            <div class="flex-c gap-2">
+              <label class="cursor-pointer text-theme hover:underline">
+                上传文件
+                <input
+                  type="file"
+                  class="hidden"
+                  accept=".txt,.md,.pdf,.docx,.doc,.csv,.xlsx,.xls,.png,.jpg,.jpeg,.gif,.webp"
+                  @change="handleFileUpload"
+                />
+              </label>
               <ElIcon
-                class="shrink-0 cursor-pointer text-g-400 hover:text-theme"
+                class="cursor-pointer text-g-500 hover:text-theme"
                 :size="14"
-                @click="previewDocument(doc)"
+                @click="docListCollapsed = !docListCollapsed"
               >
-                <View />
-              </ElIcon>
-              <ElIcon
-                class="shrink-0 cursor-pointer text-g-400 hover:text-danger"
-                :size="14"
-                @click="removeDocument(doc.id)"
-              >
-                <Delete />
+                <component :is="docListCollapsed ? ArrowDown : ArrowUp" />
               </ElIcon>
             </div>
           </div>
-          <div v-if="documents.length === 0" class="py-2 text-center text-xs text-g-400"
-            >暂无文档</div
-          >
-          <div class="mt-2 flex-c gap-2 text-xs">
-            <ElCheckbox v-model="enableRag" size="small" label="启用 RAG" />
+          <!-- Collapsible file list -->
+          <div v-show="!docListCollapsed" class="max-h-36 overflow-y-auto px-4 pb-2">
+            <div
+              v-for="doc in documents"
+              :key="doc.id"
+              class="mb-1.5 flex-cb rounded bg-white px-2.5 py-1.5 text-xs"
+            >
+              <div class="flex-c gap-1.5 overflow-hidden">
+                <ElIcon :size="14" class="shrink-0 text-g-500"><Document /></ElIcon>
+                <span class="truncate">{{ doc.filename }}</span>
+                <ElTag
+                  :type="
+                    doc.status === 'ready'
+                      ? 'success'
+                      : doc.status === 'error'
+                        ? 'danger'
+                        : 'warning'
+                  "
+                  size="small"
+                >
+                  {{ doc.status === 'ready' ? '就绪' : doc.status === 'error' ? '失败' : '处理中' }}
+                </ElTag>
+              </div>
+              <div class="flex-c gap-1">
+                <ElIcon
+                  class="shrink-0 cursor-pointer text-g-400 hover:text-theme"
+                  :size="14"
+                  @click="previewDocument(doc)"
+                >
+                  <View />
+                </ElIcon>
+                <ElIcon
+                  class="shrink-0 cursor-pointer text-g-400 hover:text-danger"
+                  :size="14"
+                  @click="removeDocument(doc.id)"
+                >
+                  <Delete />
+                </ElIcon>
+              </div>
+            </div>
+            <div v-if="documents.length === 0" class="py-2 text-center text-xs text-g-400"
+              >暂无文档</div
+            >
           </div>
         </div>
 
@@ -321,7 +338,52 @@
             </div>
           </div>
 
+          <!-- Active skill indicator -->
+          <div v-if="activeSkill" class="mb-2 flex-cb rounded-lg bg-success/10 px-3 py-1.5">
+            <div class="flex-c gap-1.5 text-xs text-success">
+              <ElIcon :size="14"><MagicStick /></ElIcon>
+              <span class="font-medium">技能: {{ activeSkill.name }}</span>
+            </div>
+            <ElIcon
+              class="cursor-pointer text-g-400 hover:text-danger"
+              :size="14"
+              @click="activeSkill = null"
+            >
+              <Close />
+            </ElIcon>
+          </div>
+
           <div class="flex items-end gap-2">
+            <!-- Skill picker -->
+            <ElPopover
+              v-model:visible="showSkillPicker"
+              placement="top-start"
+              :width="300"
+              trigger="click"
+              @show="loadSkills"
+            >
+              <template #reference>
+                <ElTooltip content="技能" placement="top">
+                  <ElButton :type="activeSkill ? 'success' : 'default'" size="small" circle>
+                    <ElIcon :size="16"><MagicStick /></ElIcon>
+                  </ElButton>
+                </ElTooltip>
+              </template>
+              <div class="max-h-64 overflow-y-auto">
+                <div class="mb-2 text-xs font-medium text-g-500">选择技能</div>
+                <div
+                  v-for="skill in skills"
+                  :key="skill.id"
+                  class="mb-1.5 cursor-pointer rounded-lg border border-transparent px-3 py-2 text-sm transition-colors hover:border-theme/30 hover:bg-theme/5"
+                  :class="{ '!border-theme/50 !bg-theme/10': activeSkill?.id === skill.id }"
+                  @click="selectSkill(skill)"
+                >
+                  <div class="font-medium">{{ skill.name }}</div>
+                  <div class="mt-0.5 text-xs text-g-500">{{ skill.description }}</div>
+                </div>
+              </div>
+            </ElPopover>
+
             <!-- Agent toggle -->
             <ElTooltip content="Agent 模式" placement="top">
               <ElButton
@@ -391,7 +453,8 @@
     Picture,
     View,
     SetUp,
-    Check
+    Check,
+    MagicStick
   } from '@element-plus/icons-vue'
   import { ElMessage } from 'element-plus'
   import { mittBus } from '@/utils/sys'
@@ -412,10 +475,13 @@
     fetchProviders,
     fetchUpdateSession,
     streamChat,
+    fetchSkills,
+    streamSkill,
     type ChatSession,
     type ChatDocument,
     type LLMProvider,
-    type RagCitation
+    type RagCitation,
+    type Skill
   } from '@/api/chat'
 
   defineOptions({ name: 'ArtChatWindow' })
@@ -439,6 +505,10 @@
   const enableRag = ref(false)
   const enableAgent = ref(false)
   const showModelPicker = ref(false)
+  const docListCollapsed = ref(false)
+  const activeSkill = ref<Skill | null>(null)
+  const skills = ref<Skill[]>([])
+  const showSkillPicker = ref(false)
 
   /* ─── Data ────────────────────────────────────── */
 
@@ -568,6 +638,22 @@
     }
   }
 
+  /* ─── Skills ─────────────────────────────────────── */
+
+  async function loadSkills() {
+    if (skills.value.length > 0) return
+    try {
+      skills.value = await fetchSkills()
+    } catch {
+      skills.value = []
+    }
+  }
+
+  function selectSkill(skill: Skill) {
+    activeSkill.value = activeSkill.value?.id === skill.id ? null : skill
+    showSkillPicker.value = false
+  }
+
   /* ─── Session management ──────────────────────── */
 
   async function loadSessions() {
@@ -665,6 +751,31 @@
     isStreaming.value = true
 
     const assistantIdx = messages.value.length - 1
+
+    const currentSkill = activeSkill.value
+    if (currentSkill) {
+      activeSkill.value = null
+      abortController = await streamSkill(
+        currentSkill.id,
+        { content: fullContent },
+        (token) => {
+          messages.value[assistantIdx].content += token
+          scrollToBottom()
+        },
+        () => {
+          isStreaming.value = false
+          loadSessions()
+        },
+        (errMsg) => {
+          isStreaming.value = false
+          if (!messages.value[assistantIdx].content) {
+            messages.value[assistantIdx].content = `⚠️ ${errMsg}`
+          }
+        }
+      )
+      return
+    }
+
     const docIds = enableRag.value
       ? documents.value.filter((d) => d.status === 'ready').map((d) => d.id)
       : []
