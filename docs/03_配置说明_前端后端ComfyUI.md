@@ -88,6 +88,16 @@
 - `PLATFORM_INTERNAL_SECRET`：启用 ComfyUI 回调写日志的 secret（Header：`X-Platform-Secret`）\n
 - `PLATFORM_CALLBACK_URL`：后端回调地址（默认：`http://127.0.0.1:9999/api/internal/comfy/callback`）\n
 
+### 3.3 数据标注工具（SAM3 Annotation Tool）
+
+- `ANNOTATION_TOOL_PATH`：标注工具目录（本仓库默认：`.../sam3-annotation-tool`）
+- `ANNOTATION_LISTEN`：Gradio 监听地址（`127.0.0.1` 或 `0.0.0.0`）
+- `ANNOTATION_PORT_RANGE=7860-7899`：标注工具端口池
+- `ANNOTATION_LOG_DIR`：标注工具日志目录（默认 `./runtime/annotation_logs`）
+- `ANNOTATION_STARTUP_TIMEOUT_SECONDS=60`
+
+> 注意：SAM3 模型为 HuggingFace gated model，需设置 `HF_TOKEN` 环境变量并申请 `facebook/sam3` 访问权限才能使用推理功能。未配置时 Gradio UI 仍可正常启动。
+
 ---
 
 ## 4. ComfyUI（ComfyUI-master-fitow）说明
