@@ -182,7 +182,35 @@
 
 ---
 
-## 9. 系统管理模块（框架内置）
+## 9. AI 对话模块
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/chat/sessions` | 创建对话会话 |
+| GET | `/api/chat/sessions` | 会话列表 |
+| DELETE | `/api/chat/sessions/{id}` | 删除会话 |
+| POST | `/api/chat/messages` | 发送消息（SSE 流式响应） |
+| GET | `/api/chat/messages/{session_id}` | 获取会话消息历史 |
+| GET | `/api/chat/providers` | 获取可用 LLM 提供商列表 |
+| POST | `/api/chat/upload` | 上传文件（RAG 文档） |
+| GET | `/api/chat/documents` | RAG 文档列表 |
+| POST | `/api/chat/skills/{skill_id}/execute` | 执行 Skill |
+
+---
+
+## 10. 工作流模块
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/workflow/templates` | 工作流模板列表 |
+| POST | `/api/workflow/generate` | AI 辅助生成工作流 |
+| GET | `/api/workflow/templates/{id}` | 获取模板详情 |
+| POST | `/api/workflow/templates` | 保存工作流模板 |
+| DELETE | `/api/workflow/templates/{id}` | 删除模板 |
+
+---
+
+## 11. 系统管理模块（框架内置）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -192,7 +220,7 @@
 
 ---
 
-## 10. 内部回调
+## 12. 内部回调
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
