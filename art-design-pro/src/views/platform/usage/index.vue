@@ -29,10 +29,10 @@
       </ElCol>
     </ElRow>
 
-    <!-- Daily usage chart -->
+    <!-- Per-model bar chart -->
     <ElCard class="mb-3" shadow="never">
       <template #header>
-        <div class="font-semibold">每日 Token 用量趋势</div>
+        <div class="font-semibold">各模型 Token 用量</div>
       </template>
       <div ref="chartRef" style="height: 320px" v-loading="loading"></div>
     </ElCard>
@@ -106,31 +106,44 @@
   let chartInstance: ReturnType<typeof echarts.init> | null = null
 
   const loadUsage = async () => {
-    const data = (await fetchUsage()) as Record<string, unknown>
-    overview.value.totalTokens = (data.total_tokens as number) || 0
+    try {
+      const data = (await fetchUsage()) as Record<string, unknown>
+      overview.value.totalTokens = (data.total_tokens as number) || 0
 
-    const byModel = (data.by_model as Record<string, Record<string, number>>) || {}
-    modelBreakdown.value = Object.entries(byModel).map(([key, val]) => {
-      const [provider, ...rest] = key.split('/')
-      return {
-        provider,
-        model: rest.join('/'),
-        prompt_tokens: val.prompt_tokens || 0,
-        completion_tokens: val.completion_tokens || 0,
-        total_tokens: (val.prompt_tokens || 0) + (val.completion_tokens || 0),
-        count: val.count || 0
-      }
-    })
+      const byModel = (data.by_model as Record<string, Record<string, number>>) || {}
+      modelBreakdown.value = Object.entries(byModel).map(([key, val]) => {
+        const [provider, ...rest] = key.split('/')
+        return {
+          provider,
+          model: rest.join('/'),
+          prompt_tokens: val.prompt_tokens || 0,
+          completion_tokens: val.completion_tokens || 0,
+          total_tokens: (val.prompt_tokens || 0) + (val.completion_tokens || 0),
+          count: val.count || 0
+        }
+      })
+    } catch {
+      overview.value.totalTokens = 0
+      modelBreakdown.value = []
+    }
   }
 
   const loadSessions = async () => {
-    const sessions = await fetchSessions()
-    overview.value.totalSessions = sessions?.length || 0
+    try {
+      const sessions = await fetchSessions()
+      overview.value.totalSessions = sessions?.length || 0
+    } catch {
+      overview.value.totalSessions = 0
+    }
   }
 
   const loadDocuments = async () => {
-    const docs = await fetchDocuments()
-    overview.value.totalDocuments = docs?.length || 0
+    try {
+      const docs = await fetchDocuments()
+      overview.value.totalDocuments = docs?.length || 0
+    } catch {
+      overview.value.totalDocuments = 0
+    }
   }
 
   const loadAdminData = async () => {
@@ -152,36 +165,34 @@
     }
 
     const rows = modelBreakdown.value
-    const dateMap = new Map<string, number>()
-    const today = new Date()
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today)
-      d.setDate(d.getDate() - i)
-      const key = d.toISOString().slice(0, 10)
-      dateMap.set(key, 0)
-    }
-
-    const totalTokens = rows.reduce((sum, r) => sum + r.total_tokens, 0)
-    const dates = [...dateMap.keys()]
-    if (totalTokens > 0 && dates.length > 0) {
-      const lastDate = dates[dates.length - 1]
-      dateMap.set(lastDate, totalTokens)
-    }
+    const models = rows.map((r) => r.model || r.provider)
+    const promptData = rows.map((r) => r.prompt_tokens)
+    const completionData = rows.map((r) => r.completion_tokens)
 
     chartInstance.setOption({
       tooltip: { trigger: 'axis' },
-      grid: { top: 20, right: 20, bottom: 30, left: 60 },
+      legend: { data: ['Prompt Tokens', 'Completion Tokens'] },
+      grid: { top: 40, right: 20, bottom: 40, left: 60 },
       xAxis: {
         type: 'category',
-        data: dates
+        data: models,
+        axisLabel: { rotate: models.length > 4 ? 30 : 0 }
       },
       yAxis: { type: 'value', name: 'Tokens' },
       series: [
         {
-          data: dates.map((d) => dateMap.get(d) || 0),
-          type: 'line',
-          smooth: true,
-          areaStyle: { opacity: 0.15 }
+          name: 'Prompt Tokens',
+          type: 'bar',
+          stack: 'total',
+          data: promptData,
+          itemStyle: { borderRadius: [0, 0, 0, 0] }
+        },
+        {
+          name: 'Completion Tokens',
+          type: 'bar',
+          stack: 'total',
+          data: completionData,
+          itemStyle: { borderRadius: [4, 4, 0, 0] }
         }
       ]
     })

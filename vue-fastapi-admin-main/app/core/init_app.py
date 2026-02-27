@@ -289,6 +289,8 @@ async def ensure_platform_menus():
     await ensure_child(name="数据统计", path="stats", order=2, component="/platform/stats")
     await ensure_child(name="生成日志", path="logs", order=3, component="/platform/logs")
     await ensure_child(name="服务器监控", path="monitor", order=4, component="/platform/monitor")
+    await ensure_child(name="工作流编辑器", path="workflow", order=5, component="/platform/workflow-editor")
+    await ensure_child(name="用量与计费", path="usage", order=6, component="/platform/usage")
 
 
 async def ensure_role_policies():
