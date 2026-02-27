@@ -61,7 +61,11 @@
               </div>
             </div>
 
-            <div class="line-clamp-1 text-xs text-gray-500 mb-3">{{ p.note || '—' }}</div>
+            <div v-if="p.note" class="line-clamp-1 text-xs text-gray-500 mb-2">{{ p.note }}</div>
+
+            <div v-if="isTargetReached(p)" class="text-xs text-green-600 mb-2 flex items-center gap-1">
+              <span>✓</span> 已达目标数量，编辑项目可调整上限
+            </div>
 
             <div class="flex flex-wrap gap-2">
               <ElButton
@@ -261,7 +265,11 @@
     }
   }
 
-  const canOpenComfy = (p: Api.DataGen.Project) => p.owner_user_id === userId.value
+  const isTargetReached = (p: Api.DataGen.Project) =>
+    p.target_count > 0 && p.generated_count >= p.target_count
+
+  const canOpenComfy = (p: Api.DataGen.Project) =>
+    p.owner_user_id === userId.value && !isTargetReached(p)
 
   const comfyLoading = ref<number | null>(null)
   const annotationLoading = ref<number | null>(null)

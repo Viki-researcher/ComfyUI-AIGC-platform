@@ -203,11 +203,17 @@ async def open_comfy(project_id: int, request: Request):
     if not project:
         return Fail(code=404, msg="项目不存在")
 
-    # 资源级权限：项目所有者才能启动/打开
     if project.owner_user_id != user_id:
         return Fail(code=403, msg="无操作权限")
 
-    # 若已存在服务记录：只能 owner 访问（双保险）
+    from app.models.platform import GenerationLog
+    gen_count = await GenerationLog.filter(project_id=project_id, status="成功").count()
+    if project.target_count and gen_count >= project.target_count:
+        return Fail(
+            code=400,
+            msg=f"已达到目标生成数量上限（{gen_count}/{project.target_count}），请通过编辑项目修改目标数量后继续"
+        )
+
     existing = await ComfyUIService.filter(project_id=project_id).first()
     if existing and existing.user_id != user_id:
         return Fail(code=403, msg="无操作权限")
