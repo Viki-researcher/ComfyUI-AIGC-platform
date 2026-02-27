@@ -331,6 +331,43 @@ async def delete_document(doc_id: int, user: User = Depends(AuthControl.is_authe
     return Success(msg="已删除")
 
 
+@router.get("/documents/{doc_id}/preview", summary="预览文档内容")
+async def preview_document(doc_id: int, user: User = Depends(AuthControl.is_authed)):
+    doc = await ChatDocument.get_or_none(id=doc_id, user_id=user.id)
+    if not doc:
+        return Fail(msg="文档不存在")
+    if not os.path.exists(doc.file_path):
+        return Fail(msg="文件不存在")
+
+    ext = doc.file_type.lower()
+
+    if ext in ("pdf", "png", "jpg", "jpeg", "gif", "webp", "svg"):
+        mime_map = {
+            "pdf": "application/pdf",
+            "png": "image/png",
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "gif": "image/gif",
+            "webp": "image/webp",
+            "svg": "image/svg+xml",
+        }
+        return FileResponse(
+            doc.file_path,
+            media_type=mime_map.get(ext, "application/octet-stream"),
+            filename=doc.filename,
+        )
+
+    try:
+        with open(doc.file_path, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read(200000)
+    except Exception:
+        with open(doc.file_path, "rb") as f:
+            content = f.read(200000).decode("utf-8", errors="replace")
+
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse(content)
+
+
 # ─── 用量查询 ─────────────────────────────────────────────
 
 @router.get("/usage", summary="获取当前用户的 Token 用量汇总")
