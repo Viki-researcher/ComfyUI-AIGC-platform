@@ -83,6 +83,8 @@ class HttpAuditLogMiddleware(BaseHTTPMiddleware):
 
     async def get_response_body(self, request: Request, response: Response) -> Any:
         content_type = (response.headers.get("content-type") or "").lower()
+        if "text/event-stream" in content_type:
+            return {"code": 0, "msg": "SSE stream omitted", "data": None}
         if ("application/json" not in content_type) and (not content_type.startswith("text/")):
             return {"code": 0, "msg": f"Non-JSON response omitted ({content_type})", "data": None}
 
