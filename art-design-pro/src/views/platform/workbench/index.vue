@@ -33,23 +33,38 @@
               </div>
               <div class="flex-cb">
                 <span>所有者</span>
+                <!-- 当 owner_user_name 或 note 为空时，使用 em-dash（—）作为占位符文本，并非 UI 横线元素 -->
                 <span class="text-gray-800">{{ p.owner_user_name || '—' }}</span>
               </div>
+              <div class="flex-cb">
+                <span>生成进度</span>
+                <span class="text-gray-800">
+                  已生成 {{ p.generated_count }} /
+                  {{ p.target_count > 0 ? '目标 ' + p.target_count : '无上限' }}
+                </span>
+              </div>
               <div class="line-clamp-2 pt-1 text-gray-700">
+                <!-- em-dash（—）作为空备注的占位符文本 -->
                 {{ p.note || '—' }}
               </div>
             </div>
 
             <div class="mt-3 flex flex-wrap gap-2">
-              <ElButton
-                v-auth="'open_comfy'"
-                type="primary"
-                :disabled="!canOpenComfy(p)"
-                @click="handleOpenComfy(p)"
-                v-ripple
+              <ElTooltip
+                :content="isTargetReached(p) ? '已达到目标上限' : ''"
+                :disabled="!isTargetReached(p)"
+                placement="top"
               >
-                数据生成
-              </ElButton>
+                <ElButton
+                  v-auth="'open_comfy'"
+                  type="primary"
+                  :disabled="!canOpenComfy(p)"
+                  @click="handleOpenComfy(p)"
+                  v-ripple
+                >
+                  数据生成
+                </ElButton>
+              </ElTooltip>
               <ElButton
                 v-auth="'project_edit'"
                 :disabled="p.owner_user_id !== userId"
@@ -127,7 +142,8 @@
   const formModel = ref<Record<string, any>>({
     name: '',
     code: '',
-    note: ''
+    note: '',
+    target_count: 0
   })
 
   const formItems = computed(() => [
@@ -148,6 +164,12 @@
       label: '备注',
       type: 'input',
       props: { type: 'textarea', rows: 3, placeholder: '可选' }
+    },
+    {
+      key: 'target_count',
+      label: '目标生成数量',
+      type: 'input',
+      props: { type: 'number', placeholder: '0 表示不限制', min: 0 }
     }
   ])
 
@@ -165,14 +187,19 @@
   const openCreateDialog = () => {
     dialogMode.value = 'create'
     editingId.value = null
-    formModel.value = { name: '', code: '', note: '' }
+    formModel.value = { name: '', code: '', note: '', target_count: 0 }
     dialogVisible.value = true
   }
 
   const openEditDialog = (p: Api.DataGen.Project) => {
     dialogMode.value = 'edit'
     editingId.value = p.id
-    formModel.value = { name: p.name, code: p.code, note: p.note || '' }
+    formModel.value = {
+      name: p.name,
+      code: p.code,
+      note: p.note || '',
+      target_count: p.target_count || 0
+    }
     dialogVisible.value = true
   }
 
@@ -180,16 +207,19 @@
     if (!formModel.value.name || !formModel.value.code) return
     saving.value = true
     try {
+      const targetCount = Number(formModel.value.target_count) || 0
       if (dialogMode.value === 'create') {
         await fetchCreateProject({
           name: formModel.value.name,
           code: formModel.value.code,
-          note: formModel.value.note
+          note: formModel.value.note,
+          target_count: targetCount
         })
       } else if (editingId.value) {
         await fetchUpdateProject(editingId.value, {
           name: formModel.value.name,
-          note: formModel.value.note
+          note: formModel.value.note,
+          target_count: targetCount
         })
       }
       dialogVisible.value = false
@@ -199,8 +229,12 @@
     }
   }
 
+  const isTargetReached = (p: Api.DataGen.Project) => {
+    return p.target_count > 0 && p.generated_count >= p.target_count
+  }
+
   const canOpenComfy = (p: Api.DataGen.Project) => {
-    return p.owner_user_id === userId.value
+    return p.owner_user_id === userId.value && !isTargetReached(p)
   }
 
   const handleOpenComfy = async (p: Api.DataGen.Project) => {

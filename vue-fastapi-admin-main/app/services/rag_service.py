@@ -445,14 +445,17 @@ async def index_comfyui_docs(comfyui_repo_path: str) -> int:
 
 
 def build_rag_context(chunks: list[dict]) -> str:
-    """将检索到的分块构建为上下文文本。"""
+    """将检索到的分块构建为带编号来源标注的上下文文本，引导 LLM 在回答中引用来源。"""
     if not chunks:
         return ""
-    parts = ["以下是从用户上传的文档中检索到的相关内容，请参考回答：", ""]
+    parts = [
+        "以下是从用户上传的文档中检索到的相关内容。请在回答中引用相关片段时标注来源（如 [来源1]、[来源2]）。",
+        "",
+    ]
     for i, ch in enumerate(chunks, 1):
         doc_name = ch.get("document_name", "")
-        source_label = f" (来源: {doc_name})" if doc_name else ""
-        parts.append(f"[文档片段 {i}{source_label}]")
+        chunk_index = ch.get("chunk_index", "")
+        parts.append(f"[来源{i}] 文档: {doc_name}, 片段 {chunk_index}")
         parts.append(ch["content"])
         parts.append("")
     return "\n".join(parts)

@@ -149,6 +149,8 @@ declare namespace Api {
       note?: string
       owner_user_id: number
       owner_user_name?: string
+      target_count: number
+      generated_count: number
       create_time: string
       update_time: string
     }
@@ -157,6 +159,7 @@ declare namespace Api {
       name: string
       code: string
       note?: string
+      target_count?: number
     }
 
     interface OpenComfyResponse {

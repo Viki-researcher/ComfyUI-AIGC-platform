@@ -220,6 +220,10 @@ export async function fetchUploadImage(file: File): Promise<{ url: string; filen
 
 /* ─── Usage ──────────────────────────────────────── */
 
-export function fetchUsage() {
-  return request.get<Record<string, unknown>>({ url: '/api/chat/usage' })
+export function fetchUsage(params?: { start_date?: string; end_date?: string }) {
+  return request.get<Record<string, unknown>>({ url: '/api/chat/usage', params })
+}
+
+export function fetchUsageAll(params?: { start_date?: string; end_date?: string }) {
+  return request.get<Record<string, unknown>[]>({ url: '/api/chat/usage/all', params })
 }

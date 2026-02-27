@@ -9,7 +9,7 @@ from tortoise.expressions import Q
 from app.core.ctx import CTX_USER_ID
 from app.core.dependency import DependPermission
 from app.models import User
-from app.models.platform import ComfyUIService, Project
+from app.models.platform import ComfyUIService, GenerationLog, Project
 from app.services.comfyui_manager import ensure_comfyui_service, stop_pid
 from app.schemas.base import Fail, Success
 from app.schemas.platform import OpenComfyOut, ProjectCreate, ProjectUpdate
@@ -68,12 +68,16 @@ async def create_project(req_in: ProjectCreate):
     if exists:
         return Fail(code=400, msg="项目号已存在")
 
-    obj = await Project.create(
+    create_kwargs: dict = dict(
         name=req_in.name,
         code=req_in.code,
         note=req_in.note,
         owner_user_id=user_id,
     )
+    if req_in.target_count is not None:
+        create_kwargs["target_count"] = req_in.target_count
+
+    obj = await Project.create(**create_kwargs)
     owner = await User.filter(id=user_id).first()
 
     return Success(
@@ -84,6 +88,8 @@ async def create_project(req_in: ProjectCreate):
             "note": obj.note,
             "owner_user_id": obj.owner_user_id,
             "owner_user_name": owner.username if owner else "",
+            "target_count": obj.target_count,
+            "generated_count": 0,
             "create_time": _now_str(obj.created_at),
             "update_time": _now_str(obj.updated_at),
         }
@@ -105,6 +111,13 @@ async def list_projects(
     owner_ids = list({int(p.owner_user_id) for p in rows if p.owner_user_id is not None})
     owner_rows = await User.filter(id__in=owner_ids).values("id", "username") if owner_ids else []
     owner_map = {int(r["id"]): r["username"] for r in owner_rows}
+
+    project_ids = [p.id for p in rows]
+    gen_counts: dict[int, int] = {}
+    if project_ids:
+        for pid in project_ids:
+            gen_counts[pid] = await GenerationLog.filter(project_id=pid, status="成功").count()
+
     data = [
         {
             "id": p.id,
@@ -113,6 +126,8 @@ async def list_projects(
             "note": p.note,
             "owner_user_id": p.owner_user_id,
             "owner_user_name": owner_map.get(int(p.owner_user_id), ""),
+            "target_count": p.target_count,
+            "generated_count": gen_counts.get(p.id, 0),
             "create_time": _now_str(p.created_at),
             "update_time": _now_str(p.updated_at),
         }
@@ -134,6 +149,7 @@ async def update_project(project_id: int, req_in: ProjectUpdate):
     if update_dict:
         await project.update_from_dict(update_dict).save()
     owner = await User.filter(id=project.owner_user_id).first()
+    gen_count = await GenerationLog.filter(project_id=project.id, status="成功").count()
 
     return Success(
         data={
@@ -143,6 +159,8 @@ async def update_project(project_id: int, req_in: ProjectUpdate):
             "note": project.note,
             "owner_user_id": project.owner_user_id,
             "owner_user_name": owner.username if owner else "",
+            "target_count": project.target_count,
+            "generated_count": gen_count,
             "create_time": _now_str(project.created_at),
             "update_time": _now_str(project.updated_at),
         }
@@ -176,6 +194,12 @@ async def open_comfy(project_id: int, request: Request):
     # 资源级权限：项目所有者才能启动/打开
     if project.owner_user_id != user_id:
         return Fail(code=403, msg="无操作权限")
+
+    # 检查目标生成数量上限
+    if project.target_count > 0:
+        gen_count = await GenerationLog.filter(project_id=project_id, status="成功").count()
+        if gen_count >= project.target_count:
+            return Fail(msg="已达到目标生成数量上限，请修改目标数量后继续")
 
     # 若已存在服务记录：只能 owner 访问（双保险）
     existing = await ComfyUIService.filter(project_id=project_id).first()

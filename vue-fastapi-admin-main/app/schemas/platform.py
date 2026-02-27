@@ -10,11 +10,13 @@ class ProjectCreate(BaseModel):
     name: str = Field(..., description="项目名称")
     code: str = Field(..., description="项目号")
     note: Optional[str] = Field(None, description="备注")
+    target_count: Optional[int] = Field(None, description="目标生成数量(0=不限制)")
 
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = Field(None, description="项目名称")
     note: Optional[str] = Field(None, description="备注")
+    target_count: Optional[int] = Field(None, description="目标生成数量(0=不限制)")
 
 
 class ProjectOut(BaseModel):
@@ -23,6 +25,8 @@ class ProjectOut(BaseModel):
     code: str
     note: Optional[str] = None
     owner_user_id: int
+    target_count: int = 0
+    generated_count: int = 0
     create_time: str
     update_time: str
 
