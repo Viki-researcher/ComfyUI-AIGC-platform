@@ -145,13 +145,11 @@ def revert_object_refinement(obj_id):
 
 def export_results(output_path, export_type="YOLO", zip_output=False):
     """Export results to output folder."""
-    print(f"📦  Exporting results to {output_path} (Type: {export_type}, Zip: {zip_output})...")
-    
-    if "Not supported yet" in export_type:
-        raise gr.Error(f"Export type '{export_type}' is not supported yet.")
+    fmt = "coco" if "COCO" in export_type else "yolo"
+    print(f"📦  Exporting results to {output_path} (Type: {fmt}, Zip: {zip_output})...")
         
     try:
-        res = controller.export_data(output_path, purge=True, zip_output=zip_output)
+        res = controller.export_data(output_path, purge=True, zip_output=zip_output, format=fmt)
         if res:
             _, msg = res
             return msg
@@ -554,7 +552,7 @@ with gr.Blocks() as demo:
                         
                         with gr.Row():
                             txt_output_dir = gr.Textbox(label="Output Folder", value="output", scale=3)
-                            export_type = gr.Dropdown(label="Export Type", choices=["YOLO", "COCO (Not supported yet)"], value="YOLO", scale=1)
+                            export_type = gr.Dropdown(label="Export Type", choices=["YOLO", "COCO"], value="YOLO", scale=1)
                         
                         gr.Markdown("⚠️ **Warning:** Exporting will delete the current contents in the output directory before saving.")
                         

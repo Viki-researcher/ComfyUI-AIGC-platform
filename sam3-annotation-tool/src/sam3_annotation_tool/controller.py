@@ -215,7 +215,116 @@ class AppController:
         
         return obj.binary_mask
 
-    def export_data(self, output_dir: str, purge: bool = False, zip_output: bool = False):
+    def export_data(self, output_dir: str, purge: bool = False, zip_output: bool = False, format: str = "yolo"):
+        """Export all images and annotations. format: 'yolo' or 'coco'."""
+        if format == "coco":
+            return self._export_coco(output_dir, purge, zip_output)
+        return self._export_yolo(output_dir, purge, zip_output)
+
+    def _export_coco(self, output_dir: str, purge: bool = False, zip_output: bool = False):
+        """Export in COCO JSON format."""
+        if self.current_image_path:
+            self.project.annotations[self.current_image_path] = self.store
+
+        if not self.project.annotations:
+            return None, "No annotations to export."
+
+        images_dir = os.path.join(output_dir, "images")
+        ann_dir = os.path.join(output_dir, "annotations")
+
+        if purge and os.path.exists(output_dir):
+            shutil.rmtree(output_dir)
+
+        os.makedirs(images_dir, exist_ok=True)
+        os.makedirs(ann_dir, exist_ok=True)
+
+        all_class_names = set()
+        for store in self.project.annotations.values():
+            for obj in store.objects.values():
+                all_class_names.add(obj.class_name)
+
+        class_list = sorted(list(all_class_names))
+        class_map = {name: i + 1 for i, name in enumerate(class_list)}
+
+        coco = {
+            "images": [],
+            "annotations": [],
+            "categories": [{"id": i + 1, "name": name, "supercategory": "none"} for i, name in enumerate(class_list)],
+        }
+
+        img_id = 0
+        ann_id = 0
+
+        for path, store in self.project.annotations.items():
+            if not store.objects:
+                continue
+
+            filename = os.path.basename(path)
+            shutil.copy2(path, os.path.join(images_dir, filename))
+
+            try:
+                with Image.open(path) as img:
+                    w, h = img.size
+            except Exception:
+                continue
+
+            img_id += 1
+            coco["images"].append({"id": img_id, "file_name": filename, "width": w, "height": h})
+
+            for obj in store.objects.values():
+                cat_id = class_map.get(obj.class_name, 1)
+                mask = obj.binary_mask.astype(np.uint8)
+                contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+                for cnt in contours:
+                    points = cnt.flatten().tolist()
+                    if len(points) < 6:
+                        continue
+                    x_coords = points[0::2]
+                    y_coords = points[1::2]
+                    x_min, x_max = min(x_coords), max(x_coords)
+                    y_min, y_max = min(y_coords), max(y_coords)
+                    bbox = [x_min, y_min, x_max - x_min, y_max - y_min]
+                    area = cv2.contourArea(cnt)
+
+                    ann_id += 1
+                    coco["annotations"].append({
+                        "id": ann_id,
+                        "image_id": img_id,
+                        "category_id": cat_id,
+                        "segmentation": [points],
+                        "area": float(area),
+                        "bbox": bbox,
+                        "iscrowd": 0,
+                    })
+
+        import json
+        with open(os.path.join(ann_dir, "instances_default.json"), "w") as f:
+            json.dump(coco, f, indent=2)
+
+        msg = f"Exported {img_id} images in COCO format to {output_dir}"
+
+        if zip_output:
+            zip_name = "dataset_coco"
+            if self.active_project_path:
+                zip_name = os.path.splitext(os.path.basename(self.active_project_path))[0] + "_coco"
+            parent_dir = os.path.dirname(os.path.abspath(output_dir))
+            os.makedirs(os.path.join(parent_dir, "temp"), exist_ok=True)
+            zip_file = shutil.make_archive(os.path.join(parent_dir, "temp", zip_name), "zip", output_dir)
+            for item in os.listdir(output_dir):
+                item_path = os.path.join(output_dir, item)
+                if os.path.isfile(item_path):
+                    os.unlink(item_path)
+                elif os.path.isdir(item_path):
+                    shutil.rmtree(item_path)
+            final_path = os.path.join(output_dir, f"{zip_name}.zip")
+            shutil.move(zip_file, final_path)
+            shutil.rmtree(os.path.join(parent_dir, "temp"), ignore_errors=True)
+            msg += f" (zipped: {final_path})"
+
+        return output_dir, msg
+
+    def _export_yolo(self, output_dir: str, purge: bool = False, zip_output: bool = False):
         """Export all images and annotations in playlist to YOLO format."""
         
         # Ensure current state is saved
