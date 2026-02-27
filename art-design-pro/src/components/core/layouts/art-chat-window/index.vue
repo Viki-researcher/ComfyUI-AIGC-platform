@@ -395,6 +395,7 @@
   } from '@element-plus/icons-vue'
   import { ElMessage } from 'element-plus'
   import { mittBus } from '@/utils/sys'
+  import { useUserStore } from '@/store/modules/user'
   import { marked } from 'marked'
   import hljs from 'highlight.js'
   import DOMPurify from 'dompurify'
@@ -818,20 +819,26 @@
 
   function previewDocument(doc: ChatDocument) {
     const ext = doc.filename.split('.').pop()?.toLowerCase()
-    if (ext === 'pdf') {
-      window.open(`/api/chat/documents/${doc.id}/preview`, '_blank')
-    } else if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext || '')) {
-      window.open(`/api/chat/documents/${doc.id}/preview`, '_blank')
+    const { accessToken } = useUserStore()
+    const headers: Record<string, string> = {}
+    if (accessToken) headers['Authorization'] = accessToken
+
+    if (ext === 'pdf' || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext || '')) {
+      fetch(`/api/chat/documents/${doc.id}/preview`, { headers })
+        .then((r) => r.blob())
+        .then((blob) => {
+          const url = URL.createObjectURL(blob)
+          window.open(url, '_blank')
+        })
+        .catch(() => ElMessage.error('预览失败'))
     } else {
-      fetch(`/api/chat/documents/${doc.id}/preview`)
+      fetch(`/api/chat/documents/${doc.id}/preview`, { headers })
         .then((r) => r.text())
         .then((text) => {
           docPreviewContent.value = text
           docPreviewVisible.value = true
         })
-        .catch(() => {
-          ElMessage.error('预览失败')
-        })
+        .catch(() => ElMessage.error('预览失败'))
     }
   }
 
