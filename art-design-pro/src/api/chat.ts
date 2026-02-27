@@ -218,6 +218,79 @@ export async function fetchUploadImage(file: File): Promise<{ url: string; filen
   return json.data
 }
 
+/* ─── Skills ─────────────────────────────────────── */
+
+export interface Skill {
+  id: string
+  name: string
+  icon: string
+  description: string
+  category: string
+}
+
+export function fetchSkills() {
+  return request.get<Skill[]>({ url: '/api/chat/skills' })
+}
+
+export async function streamSkill(
+  skillId: string,
+  params: ChatSendParams,
+  onToken: (text: string) => void,
+  onDone: () => void,
+  onError: (msg: string) => void
+): Promise<AbortController> {
+  const controller = new AbortController()
+  const { accessToken } = useUserStore()
+
+  try {
+    const response = await fetch(`/api/chat/skills/${skillId}/run`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: accessToken || ''
+      },
+      body: JSON.stringify(params),
+      signal: controller.signal
+    })
+
+    if (!response.ok || !response.body) {
+      onError(`请求失败: HTTP ${response.status}`)
+      return controller
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    const processStream = async () => {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const data = JSON.parse(line.slice(6))
+            if (data.type === 'token') onToken(data.content)
+            else if (data.type === 'done') onDone()
+            else if (data.type === 'error') onError(data.content)
+          } catch {
+            /* skip */
+          }
+        }
+      }
+    }
+    processStream().catch((err) => {
+      if (err.name !== 'AbortError') onError(String(err))
+    })
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name !== 'AbortError') onError(String(err))
+  }
+  return controller
+}
+
 /* ─── Usage ──────────────────────────────────────── */
 
 export function fetchUsage(params?: { start_date?: string; end_date?: string }) {
