@@ -15,7 +15,10 @@ export function fetchGetProjects(params?: { name?: string; code?: string }) {
   })
 }
 
-export function fetchUpdateProject(projectId: number, params: Partial<Pick<Api.DataGen.Project, 'name' | 'note'>>) {
+export function fetchUpdateProject(
+  projectId: number,
+  params: Partial<Pick<Api.DataGen.Project, 'name' | 'note' | 'target_count'>>
+) {
   return request.put<Api.DataGen.Project>({
     url: `/api/projects/${projectId}`,
     params,
@@ -34,7 +37,7 @@ export function fetchOpenComfy(projectId: number) {
   return request.post<Api.DataGen.OpenComfyResponse>({
     url: `/api/projects/${projectId}/open_comfy`,
     timeout: 300000,
-    showErrorMessage: false
+    showErrorMessage: true
   })
 }
 
@@ -42,7 +45,6 @@ export function fetchOpenAnnotation(projectId: number) {
   return request.post<Api.DataGen.OpenAnnotationResponse>({
     url: `/api/projects/${projectId}/open_annotation`,
     timeout: 120000,
-    showErrorMessage: false
+    showErrorMessage: true
   })
 }
-

@@ -73,6 +73,7 @@ async def create_project(req_in: ProjectCreate):
         name=req_in.name,
         code=req_in.code,
         note=req_in.note,
+        target_count=req_in.target_count,
         owner_user_id=user_id,
     )
     owner = await User.filter(id=user_id).first()
@@ -85,6 +86,10 @@ async def create_project(req_in: ProjectCreate):
             "note": obj.note,
             "owner_user_id": obj.owner_user_id,
             "owner_user_name": owner.username if owner else "",
+            "target_count": obj.target_count,
+            "generated_count": 0,
+            "comfy_status": "stopped",
+            "annotation_status": "stopped",
             "create_time": _now_str(obj.created_at),
             "update_time": _now_str(obj.updated_at),
         }
@@ -106,6 +111,20 @@ async def list_projects(
     owner_ids = list({int(p.owner_user_id) for p in rows if p.owner_user_id is not None})
     owner_rows = await User.filter(id__in=owner_ids).values("id", "username") if owner_ids else []
     owner_map = {int(r["id"]): r["username"] for r in owner_rows}
+
+    from app.models.platform import GenerationLog
+    project_ids = [p.id for p in rows]
+    gen_counts = {}
+    for pid in project_ids:
+        gen_counts[pid] = await GenerationLog.filter(project_id=pid, status="成功").count()
+
+    comfy_map = {}
+    ann_map = {}
+    for svc in await ComfyUIService.filter(project_id__in=project_ids).all():
+        comfy_map[svc.project_id] = svc.status
+    for svc in await AnnotationService.filter(project_id__in=project_ids).all():
+        ann_map[svc.project_id] = svc.status
+
     data = [
         {
             "id": p.id,
@@ -114,6 +133,10 @@ async def list_projects(
             "note": p.note,
             "owner_user_id": p.owner_user_id,
             "owner_user_name": owner_map.get(int(p.owner_user_id), ""),
+            "target_count": p.target_count,
+            "generated_count": gen_counts.get(p.id, 0),
+            "comfy_status": comfy_map.get(p.id, "stopped"),
+            "annotation_status": ann_map.get(p.id, "stopped"),
             "create_time": _now_str(p.created_at),
             "update_time": _now_str(p.updated_at),
         }
@@ -180,11 +203,17 @@ async def open_comfy(project_id: int, request: Request):
     if not project:
         return Fail(code=404, msg="项目不存在")
 
-    # 资源级权限：项目所有者才能启动/打开
     if project.owner_user_id != user_id:
         return Fail(code=403, msg="无操作权限")
 
-    # 若已存在服务记录：只能 owner 访问（双保险）
+    from app.models.platform import GenerationLog
+    gen_count = await GenerationLog.filter(project_id=project_id, status="成功").count()
+    if project.target_count and gen_count >= project.target_count:
+        return Fail(
+            code=400,
+            msg=f"已达到目标生成数量上限（{gen_count}/{project.target_count}），请通过编辑项目修改目标数量后继续"
+        )
+
     existing = await ComfyUIService.filter(project_id=project_id).first()
     if existing and existing.user_id != user_id:
         return Fail(code=403, msg="无操作权限")

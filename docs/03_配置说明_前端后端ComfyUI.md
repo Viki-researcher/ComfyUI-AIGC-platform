@@ -88,6 +88,16 @@
 - `PLATFORM_INTERNAL_SECRET`：启用 ComfyUI 回调写日志的 secret（Header：`X-Platform-Secret`）\n
 - `PLATFORM_CALLBACK_URL`：后端回调地址（默认：`http://127.0.0.1:9999/api/internal/comfy/callback`）\n
 
+### 3.3 数据标注工具（SAM3 Annotation Tool）
+
+- `ANNOTATION_TOOL_PATH`：标注工具目录（本仓库默认：`.../sam3-annotation-tool`）
+- `ANNOTATION_LISTEN`：Gradio 监听地址（`127.0.0.1` 或 `0.0.0.0`）
+- `ANNOTATION_PORT_RANGE=7860-7899`：标注工具端口池
+- `ANNOTATION_LOG_DIR`：标注工具日志目录（默认 `./runtime/annotation_logs`）
+- `ANNOTATION_STARTUP_TIMEOUT_SECONDS=60`
+
+> 注意：SAM3 模型为 HuggingFace gated model，需设置 `HF_TOKEN` 环境变量并申请 `facebook/sam3` 访问权限才能使用推理功能。未配置时 Gradio UI 仍可正常启动。
+
 ---
 
 ## 4. ComfyUI（ComfyUI-master-fitow）说明
@@ -114,4 +124,57 @@ python main.py --listen 127.0.0.1 --port 8200 --disable-auto-launch
 - `docs/scripts/`：一键启动脚本读取该 env 文件并导出到进程环境
 
 一键启动脚本已落在：`docs/scripts/start_all.sh` / `stop_all.sh` / `status.sh`。
+
+---
+
+## 6. AI 对话 / RAG / Skills 配置
+
+平台集成了 LLM 对话、RAG 文档问答和 Skills 技能系统。以下为关键配置项概要，完整说明请参考 [llm-chat-config.md](llm-chat-config.md) 和 [skills-config.md](skills-config.md)。
+
+### 6.1 LLM 基础配置
+
+| 环境变量            | 默认值         | 说明                                                        |
+|--------------------|---------------|-------------------------------------------------------------|
+| `LLM_PROVIDER`     | `openai`      | 默认 LLM 提供商：`openai` / `tongyi` / `ollama` / `custom`   |
+| `LLM_API_KEY`      | `""`          | API 密钥（Ollama 可留空）                                     |
+| `LLM_API_BASE_URL` | `""`          | API 基地址（留空则使用提供商默认值）                              |
+| `LLM_MODEL`        | `gpt-4o-mini` | 默认模型名称                                                  |
+| `LLM_MAX_TOKENS`   | `4096`        | 最大生成 Token 数                                             |
+| `LLM_TEMPERATURE`  | `0.7`         | 生成温度 (0.0 - 2.0)                                         |
+| `LLM_SYSTEM_PROMPT` | 内置默认       | 默认系统提示词                                                 |
+
+### 6.2 多提供商配置
+
+通过 `LLM_PROVIDERS_JSON` 环境变量配置多个提供商，前端可在对话窗口切换：
+
+```bash
+export LLM_PROVIDERS_JSON='[
+  {"name": "tongyi", "display_name": "通义千问", "api_key": "sk-xxx", "models": ["qwen-plus"], "default_model": "qwen-plus"},
+  {"name": "ollama", "display_name": "本地模型", "base_url": "http://127.0.0.1:11434/v1", "models": ["qwen2.5:7b"], "default_model": "qwen2.5:7b"}
+]'
+```
+
+### 6.3 Embedding 配置（RAG 用）
+
+| 环境变量                 | 默认值                     | 说明                           |
+|-------------------------|---------------------------|-------------------------------|
+| `EMBEDDING_API_KEY`      | 复用 `LLM_API_KEY`         | 嵌入 API 密钥                  |
+| `EMBEDDING_API_BASE_URL` | 复用 `LLM_API_BASE_URL`    | 嵌入 API 基地址                 |
+| `EMBEDDING_MODEL`        | `text-embedding-3-small`   | 嵌入模型名称                    |
+
+### 6.4 RAG 配置
+
+| 环境变量            | 默认值                  | 说明                    |
+|--------------------|-----------------------|------------------------|
+| `RAG_ENABLED`      | `true`                | 是否启用 RAG             |
+| `RAG_CHUNK_SIZE`   | `500`                 | 文档分块大小（字符数）      |
+| `RAG_CHUNK_OVERLAP`| `50`                  | 分块重叠字符数            |
+| `RAG_TOP_K`        | `3`                   | 检索返回的最相关片段数量    |
+| `RAG_UPLOAD_DIR`   | `runtime/chat_uploads` | 文件上传存储目录           |
+
+### 6.5 Skills 技能
+
+Skills 为预配置的 LLM 提示词模板，在 `vue-fastapi-admin-main/app/services/skills_config.py` 中定义。内置 5 个技能：translate、code_review、summarize、data_analysis、workflow_helper。
+
+自定义技能方法详见 [skills-config.md](skills-config.md)。
 

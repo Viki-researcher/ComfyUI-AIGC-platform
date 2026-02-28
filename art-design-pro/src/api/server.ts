@@ -11,4 +11,3 @@ export function fetchGetServerStatsHistory() {
     url: '/api/server/stats/history'
   })
 }
-

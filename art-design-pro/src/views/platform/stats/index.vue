@@ -11,32 +11,13 @@
     </ElCard>
 
     <ElCard class="mb-3" shadow="never">
-      <ElRow :gutter="12" class="items-center">
-        <ElCol :xs="24" :sm="12" :md="6">
-          <ElDatePicker
-            v-model="filters.start_date"
-            type="date"
-            placeholder="开始日期"
-            value-format="YYYY-MM-DD"
-            class="w-full"
-          />
-        </ElCol>
-        <ElCol :xs="24" :sm="12" :md="6">
-          <ElDatePicker
-            v-model="filters.end_date"
-            type="date"
-            placeholder="结束日期"
-            value-format="YYYY-MM-DD"
-            class="w-full"
-          />
-        </ElCol>
-        <ElCol :xs="24" :sm="12" :md="6">
-          <div class="flex gap-2">
-            <ElButton type="primary" @click="loadAll" v-ripple>查询</ElButton>
-            <ElButton @click="resetFilters" v-ripple>重置</ElButton>
-          </div>
-        </ElCol>
-      </ElRow>
+      <ArtSearchBar
+        v-model="filters"
+        :items="filterItems"
+        :showExpand="false"
+        @search="loadAll"
+        @reset="handleReset"
+      />
     </ElCard>
 
     <!-- 按天趋势 -->
@@ -56,7 +37,6 @@
     </ElCard>
 
     <ElRow :gutter="12" class="mb-3">
-      <!-- 按项目曲线 -->
       <ElCol :xs="24" :md="12">
         <ElCard shadow="never" class="h-full">
           <template #header>
@@ -75,8 +55,6 @@
           <ElEmpty v-else description="暂无数据" />
         </ElCard>
       </ElCol>
-
-      <!-- 按用户曲线 -->
       <ElCol :xs="24" :md="12">
         <ElCard shadow="never" class="h-full">
           <template #header>
@@ -98,7 +76,6 @@
     </ElRow>
 
     <ElRow :gutter="12">
-      <!-- 按项目统计表 -->
       <ElCol :xs="24" :md="12">
         <ElCard shadow="never" class="h-full">
           <template #header>
@@ -110,8 +87,6 @@
           </ElTable>
         </ElCard>
       </ElCol>
-
-      <!-- 按用户统计表 -->
       <ElCol :xs="24" :md="12">
         <ElCard shadow="never" class="h-full">
           <template #header>
@@ -136,13 +111,39 @@
   const loading = ref(false)
   const trendLoading = ref(false)
 
-  const filters = ref<{
-    start_date?: string
-    end_date?: string
-  }>({
+  const filters = ref<Record<string, any>>({
     start_date: undefined,
     end_date: undefined
   })
+
+  const filterItems = computed(() => [
+    {
+      key: 'start_date',
+      label: '开始日期',
+      type: 'date',
+      props: { type: 'date', placeholder: '选择开始日期', valueFormat: 'YYYY-MM-DD' },
+      span: 8
+    },
+    {
+      key: 'end_date',
+      label: '结束日期',
+      type: 'date',
+      props: { type: 'date', placeholder: '选择结束日期', valueFormat: 'YYYY-MM-DD' },
+      span: 8
+    }
+  ])
+
+  function formatDate(val: any): string | undefined {
+    if (!val) return undefined
+    if (typeof val === 'string') return val.slice(0, 10)
+    if (val instanceof Date) {
+      const y = val.getFullYear()
+      const m = String(val.getMonth() + 1).padStart(2, '0')
+      const d = String(val.getDate()).padStart(2, '0')
+      return `${y}-${m}-${d}`
+    }
+    return undefined
+  }
 
   const dayRaw = ref<any[]>([])
   const projectRaw = ref<any[]>([])
@@ -161,8 +162,8 @@
     trendLoading.value = true
     try {
       const params = {
-        start_date: filters.value.start_date,
-        end_date: filters.value.end_date
+        start_date: formatDate(filters.value.start_date),
+        end_date: formatDate(filters.value.end_date)
       }
       const [dayData, projectData, userData, projTrend, usrTrend] = await Promise.all([
         fetchGetStats({ dimension: 'day', ...params }),
@@ -184,7 +185,7 @@
 
   onMounted(loadAll)
 
-  const resetFilters = () => {
+  const handleReset = () => {
     filters.value = { start_date: undefined, end_date: undefined }
     loadAll()
   }
@@ -226,5 +227,10 @@
 <style scoped>
   .platform-stats {
     padding: 12px;
+    overflow-y: auto;
+  }
+
+  .platform-stats > :deep(.el-card) {
+    flex-shrink: 0;
   }
 </style>

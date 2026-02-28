@@ -1,0 +1,21 @@
+# Ensure proper UTF-8 handling for all text files
+* text=auto
+
+# Force LF line endings for scripts
+*.sh text eol=lf
+*.py text eol=lf
+*.ts text eol=lf
+*.vue text eol=lf
+*.md text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.docx binary

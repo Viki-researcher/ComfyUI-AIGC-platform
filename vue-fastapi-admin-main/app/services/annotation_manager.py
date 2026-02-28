@@ -45,6 +45,15 @@ def _derive_internal_host(listen: str) -> str:
     return listen
 
 
+def _read_log_tail(log_path: Path, lines: int = 15) -> str:
+    try:
+        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+            all_lines = f.readlines()
+        return "".join(all_lines[-lines:]).strip()
+    except Exception:
+        return "(无法读取日志)"
+
+
 async def is_healthy(url: str) -> bool:
     try:
         async with httpx.AsyncClient(timeout=3) as client:
@@ -99,6 +108,9 @@ async def start_annotation_instance(user_id: int, project_id: int) -> dict:
     timeout = max(5, int(settings.ANNOTATION_STARTUP_TIMEOUT_SECONDS))
     deadline = time.time() + timeout
     while time.time() < deadline:
+        if proc.poll() is not None:
+            tail = _read_log_tail(log_path, 15)
+            raise RuntimeError(f"标注工具进程异常退出 (code={proc.returncode}):\n{tail}")
         if await is_healthy(annotation_url):
             return {
                 "port": port,
@@ -109,7 +121,8 @@ async def start_annotation_instance(user_id: int, project_id: int) -> dict:
         await asyncio.sleep(1)
 
     stop_pid(proc.pid)
-    raise RuntimeError("Annotation tool start timeout")
+    tail = _read_log_tail(log_path, 15)
+    raise RuntimeError(f"标注工具启动超时:\n{tail}")
 
 
 async def ensure_annotation_service(user_id: int, project_id: int) -> AnnotationService:

@@ -31,10 +31,9 @@ export async function fetchExportLogs(params: {
   if (params.start) query.start = params.start
   if (params.end) query.end = params.end
 
-  const { VITE_API_URL } = import.meta.env
   const { accessToken } = useUserStore()
 
-  const res = await axios.get(`${VITE_API_URL}/api/logs/export`, {
+  const res = await axios.get('/api/logs/export', {
     params: query,
     responseType: 'blob',
     headers: { Authorization: accessToken || '' }

@@ -11,7 +11,7 @@
 ### 1.1 使用自动安装脚本（推荐）
 
 ```bash
-cd /home/admin1/ai02/codeyard/wk_codeyard/Code_backup/ComfulUI/docs/scripts
+cd $PROJECT_ROOT/docs/scripts
 chmod +x install_postgres.sh
 ./install_postgres.sh
 ```

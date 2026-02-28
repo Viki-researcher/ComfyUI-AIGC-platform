@@ -90,7 +90,9 @@
   const { enabledApplications, enabledQuickLinks } = useFastEnter()
 
   // 判断是否仅显示快速链接
-  const quickLinksOnly = computed(() => !enabledApplications.value || enabledApplications.value.length === 0)
+  const quickLinksOnly = computed(
+    () => !enabledApplications.value || enabledApplications.value.length === 0
+  )
 
   /**
    * 处理导航跳转

@@ -27,11 +27,7 @@
             </ElFormItem>
 
             <ElFormItem prop="email">
-              <ElInput
-                class="custom-height"
-                v-model.trim="formData.email"
-                placeholder="邮箱"
-              />
+              <ElInput class="custom-height" v-model.trim="formData.email" placeholder="邮箱" />
             </ElFormItem>
 
             <ElFormItem prop="password">

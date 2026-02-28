@@ -149,6 +149,10 @@ declare namespace Api {
       note?: string
       owner_user_id: number
       owner_user_name?: string
+      target_count: number
+      generated_count: number
+      comfy_status: 'online' | 'offline' | 'stopped'
+      annotation_status: 'online' | 'offline' | 'stopped'
       create_time: string
       update_time: string
     }
@@ -157,6 +161,37 @@ declare namespace Api {
       name: string
       code: string
       note?: string
+      target_count?: number
+    }
+
+    interface DashboardOverview {
+      today_count: number
+      yesterday_count: number
+      total_count: number
+      success_count: number
+      success_rate: number
+      active_projects: number
+      total_users: number
+      online_comfy: number
+      online_annotation: number
+    }
+
+    interface PromptRequest {
+      description: string
+      style: string
+      enhance: boolean
+    }
+
+    interface PromptResponse {
+      positive: string
+      negative: string
+      style_used: string
+      tips: string[]
+    }
+
+    interface PromptStyle {
+      key: string
+      preview: string
     }
 
     interface OpenComfyResponse {

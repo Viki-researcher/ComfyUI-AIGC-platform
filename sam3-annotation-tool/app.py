@@ -16,8 +16,13 @@ from src.sam3_annotation_tool.view_helpers import (
 # Dynamically load example images from the example_img folder
 EXAMPLE_IMAGES = sorted(glob.glob("example_img/*.jpg") + glob.glob("example_img/*.png") + glob.glob("example_img/*.jpeg"))
 
-# Load models immediately on startup
-load_models()
+# Defer model loading — SAM3 is a gated model that requires HF_TOKEN.
+# The UI will still start; inference will fail gracefully if models are unavailable.
+try:
+    load_models()
+except Exception as e:
+    print(f"⚠️  Model loading skipped: {e}")
+    print("   Set HF_TOKEN env var and ensure access to facebook/sam3 to enable inference.")
 
 app_theme = CustomBlueTheme()
 
@@ -140,13 +145,11 @@ def revert_object_refinement(obj_id):
 
 def export_results(output_path, export_type="YOLO", zip_output=False):
     """Export results to output folder."""
-    print(f"📦  Exporting results to {output_path} (Type: {export_type}, Zip: {zip_output})...")
-    
-    if "Not supported yet" in export_type:
-        raise gr.Error(f"Export type '{export_type}' is not supported yet.")
+    fmt = "coco" if "COCO" in export_type else "yolo"
+    print(f"📦  Exporting results to {output_path} (Type: {fmt}, Zip: {zip_output})...")
         
     try:
-        res = controller.export_data(output_path, purge=True, zip_output=zip_output)
+        res = controller.export_data(output_path, purge=True, zip_output=zip_output, format=fmt)
         if res:
             _, msg = res
             return msg
@@ -549,7 +552,7 @@ with gr.Blocks() as demo:
                         
                         with gr.Row():
                             txt_output_dir = gr.Textbox(label="Output Folder", value="output", scale=3)
-                            export_type = gr.Dropdown(label="Export Type", choices=["YOLO", "COCO (Not supported yet)"], value="YOLO", scale=1)
+                            export_type = gr.Dropdown(label="Export Type", choices=["YOLO", "COCO"], value="YOLO", scale=1)
                         
                         gr.Markdown("⚠️ **Warning:** Exporting will delete the current contents in the output directory before saving.")
                         

@@ -70,28 +70,19 @@
         </div>
       </template>
       <ElRow :gutter="12">
-        <ElCol
-          v-for="(gpu, index) in stats.gpu.gpus"
-          :key="index"
-          :xs="24"
-          :sm="12"
-          :md="8"
-        >
+        <ElCol v-for="(gpu, index) in stats.gpu.gpus" :key="index" :xs="24" :sm="12" :md="8">
           <div class="gpu-card p-3 border rounded mb-3">
             <div class="font-medium mb-2">GPU {{ index }}</div>
             <div class="mb-2">
               <span class="text-gray-500">使用率：</span>
               <span class="font-medium">{{ gpu.utilization.toFixed(1) }}%</span>
             </div>
-            <ElProgress
-              :percentage="gpu.utilization"
-              :stroke-width="8"
-              status="primary"
-            />
+            <ElProgress :percentage="gpu.utilization" :stroke-width="8" status="primary" />
             <div class="mt-3">
               <span class="text-gray-500">显存：</span>
               <span class="font-medium">
-                {{ (gpu.memory_used / 1024).toFixed(1) }} / {{ (gpu.memory_total / 1024).toFixed(1) }} GB
+                {{ (gpu.memory_used / 1024).toFixed(1) }} /
+                {{ (gpu.memory_total / 1024).toFixed(1) }} GB
               </span>
             </div>
             <ElProgress

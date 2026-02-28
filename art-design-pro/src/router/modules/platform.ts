@@ -9,8 +9,14 @@ export const platformRoutes: AppRouteRecord = {
     icon: 'ri:dashboard-line',
     keepAlive: true
   },
-  redirect: '/platform/workbench',
+  redirect: '/platform/dashboard',
   children: [
+    {
+      path: 'dashboard',
+      name: 'PlatformDashboard',
+      component: '/platform/dashboard',
+      meta: { title: '仪表盘', keepAlive: false }
+    },
     {
       path: 'workbench',
       name: 'PlatformWorkbench',
@@ -26,6 +32,12 @@ export const platformRoutes: AppRouteRecord = {
           { title: '删除项目', authMark: 'project_delete' }
         ]
       }
+    },
+    {
+      path: 'prompt',
+      name: 'PlatformPrompt',
+      component: '/platform/prompt',
+      meta: { title: 'Prompt助手', keepAlive: false }
     },
     {
       path: 'stats',
@@ -44,7 +56,18 @@ export const platformRoutes: AppRouteRecord = {
       name: 'PlatformMonitor',
       component: '/platform/monitor',
       meta: { title: '服务器监控', keepAlive: true }
+    },
+    {
+      path: 'workflow',
+      name: 'PlatformWorkflow',
+      component: '/platform/workflow-editor',
+      meta: { title: '工作流编辑器', keepAlive: true }
+    },
+    {
+      path: 'usage',
+      name: 'PlatformUsage',
+      component: '/platform/usage',
+      meta: { title: '用量与计费', keepAlive: true }
     }
   ]
 }
-
