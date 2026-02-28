@@ -22,6 +22,16 @@ from app.settings.config import settings
 
 # ─── 文本提取 ───────────────────────────────────────────
 
+_CODE_EXTENSIONS = {
+    "py", "js", "ts", "jsx", "tsx", "java", "cpp", "c", "h", "hpp",
+    "go", "rs", "rb", "php", "sh", "bash", "zsh",
+    "yaml", "yml", "json", "xml", "html", "css", "scss", "less", "vue",
+    "sql", "r", "scala", "kt", "swift", "dart", "lua",
+    "toml", "ini", "cfg", "conf", "env", "dockerfile",
+    "makefile", "cmake", "gradle", "pom",
+}
+
+
 def extract_text_from_file(file_path: str, file_type: str) -> str:
     """从文件提取纯文本。"""
     path = Path(file_path)
@@ -30,7 +40,7 @@ def extract_text_from_file(file_path: str, file_type: str) -> str:
 
     ext = file_type.lower()
 
-    if ext in ("txt", "md", "markdown", "text"):
+    if ext in ("txt", "md", "markdown", "text") or ext in _CODE_EXTENSIONS:
         return path.read_text(encoding="utf-8", errors="replace")
 
     if ext == "pdf":
@@ -454,13 +464,15 @@ def build_rag_context(chunks: list[dict]) -> str:
     if not chunks:
         return ""
     parts = [
-        "以下是从用户上传的文档中检索到的相关内容。请在回答中引用相关片段时标注来源（如 [来源1]、[来源2]）。",
+        "以下是从用户上传的文档中检索到的相关片段。请基于这些内容回答用户问题。"
+        "回答时**必须**在相关语句后标注引用来源，格式为 [来源1]、[来源2] 等。"
+        "如果某段内容未被使用，不要引用。引用时请指出具体是哪个文档的哪部分。",
         "",
     ]
     for i, ch in enumerate(chunks, 1):
         doc_name = ch.get("document_name", "")
         chunk_index = ch.get("chunk_index", "")
-        parts.append(f"[来源{i}] 文档: {doc_name}, 片段 {chunk_index}")
+        parts.append(f"[来源{i}] 文档「{doc_name}」第 {chunk_index} 片段:")
         parts.append(ch["content"])
         parts.append("")
     return "\n".join(parts)

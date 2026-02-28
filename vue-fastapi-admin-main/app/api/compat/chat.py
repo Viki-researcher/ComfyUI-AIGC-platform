@@ -151,6 +151,7 @@ async def send_message(session_id: int, body: ChatSend, user: User = Depends(Aut
                 rag_ctx = build_rag_context(chunks)
                 messages.insert(1, {"role": "system", "content": rag_ctx})
                 rag_citations = chunks
+                logger.info(f"[Chat] RAG: retrieved {len(chunks)} chunks for query: {body.content[:50]}")
         except Exception as e:
             logger.warning(f"[Chat] RAG retrieval failed: {e}")
 
@@ -163,7 +164,7 @@ async def send_message(session_id: int, body: ChatSend, user: User = Depends(Aut
                 mapped_citations = [
                     {
                         "document_name": c.get("document_name", ""),
-                        "snippet": (c.get("content", ""))[:150] + ("..." if len(c.get("content", "")) > 150 else ""),
+                        "snippet": (c.get("content", ""))[:500] + ("..." if len(c.get("content", "")) > 500 else ""),
                         "relevance_score": c.get("score", 0),
                         "chunk_index": c.get("chunk_index", 0),
                     }
@@ -209,7 +210,7 @@ async def send_message(session_id: int, body: ChatSend, user: User = Depends(Aut
             mapped_citations = [
                 {
                     "document_name": c.get("document_name", ""),
-                    "snippet": (c.get("content", ""))[:150] + ("..." if len(c.get("content", "")) > 150 else ""),
+                    "snippet": (c.get("content", ""))[:500] + ("..." if len(c.get("content", "")) > 500 else ""),
                     "relevance_score": c.get("score", 0),
                     "chunk_index": c.get("chunk_index", 0),
                 }
@@ -288,7 +289,16 @@ async def upload_document(file: UploadFile = File(...), user: User = Depends(Aut
         return Fail(msg="文件名为空")
 
     ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
-    allowed = {"txt", "md", "pdf", "docx", "doc", "markdown", "text", "csv", "xlsx", "xls", "png", "jpg", "jpeg", "gif", "webp"}
+    allowed = {
+        "txt", "md", "pdf", "docx", "doc", "markdown", "text", "csv", "xlsx", "xls",
+        "png", "jpg", "jpeg", "gif", "webp",
+        "py", "js", "ts", "jsx", "tsx", "java", "cpp", "c", "h", "hpp",
+        "go", "rs", "rb", "php", "sh", "bash", "zsh",
+        "yaml", "yml", "json", "xml", "html", "css", "scss", "less", "vue",
+        "sql", "r", "scala", "kt", "swift", "dart", "lua",
+        "toml", "ini", "cfg", "conf", "env", "dockerfile",
+        "makefile", "cmake", "gradle", "pom",
+    }
     if ext not in allowed:
         return Fail(msg=f"不支持的文件类型: {ext}，支持: {', '.join(sorted(allowed))}")
 
@@ -382,8 +392,7 @@ async def preview_document(doc_id: int, user: User = Depends(AuthControl.is_auth
         with open(doc.file_path, "rb") as f:
             content = f.read(200000).decode("utf-8", errors="replace")
 
-    from fastapi.responses import PlainTextResponse
-    return PlainTextResponse(content)
+    return Success(data={"content": content, "file_type": ext, "filename": doc.filename})
 
 
 # ─── 用量查询 ─────────────────────────────────────────────

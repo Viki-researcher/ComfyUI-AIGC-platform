@@ -120,7 +120,8 @@ def _ensure_instance_links(cfg: ComfyUIConfig, inst_dir: Path) -> None:
         if dst.exists() or dst.is_symlink():
             continue
         if not src.exists():
-            raise RuntimeError(f"ComfyUI repo missing {name}: {src}")
+            src.mkdir(parents=True, exist_ok=True)
+            logger.info(f"[ComfyUI] created missing directory: {src}")
         try:
             dst.symlink_to(src, target_is_directory=True)
         except Exception as e:  # noqa: BLE001
@@ -148,6 +149,15 @@ def _write_extra_model_paths(cfg: ComfyUIConfig, inst_dir: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
     return path
+
+
+def _read_log_tail(log_path: Path, lines: int = 15) -> str:
+    try:
+        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+            all_lines = f.readlines()
+        return "".join(all_lines[-lines:]).strip()
+    except Exception:
+        return "(无法读取日志)"
 
 
 async def is_healthy(comfy_url: str) -> bool:
@@ -251,6 +261,9 @@ async def start_instance(user_id: int, project_id: int) -> dict:
 
     deadline = time.time() + max(5, cfg.startup_timeout_seconds)
     while time.time() < deadline:
+        if proc.poll() is not None:
+            tail = _read_log_tail(log_path, 15)
+            raise RuntimeError(f"ComfyUI 进程异常退出 (code={proc.returncode}):\n{tail}")
         if await is_healthy(comfy_url):
             return {
                 "port": port,
@@ -262,7 +275,8 @@ async def start_instance(user_id: int, project_id: int) -> dict:
         await asyncio.sleep(1)
 
     stop_pid(proc.pid)
-    raise RuntimeError("ComfyUI start timeout")
+    tail = _read_log_tail(log_path, 15)
+    raise RuntimeError(f"ComfyUI 启动超时:\n{tail}")
 
 
 async def ensure_comfyui_service(user_id: int, project_id: int) -> ComfyUIService:

@@ -37,7 +37,7 @@ export function fetchOpenComfy(projectId: number) {
   return request.post<Api.DataGen.OpenComfyResponse>({
     url: `/api/projects/${projectId}/open_comfy`,
     timeout: 300000,
-    showErrorMessage: false
+    showErrorMessage: true
   })
 }
 
@@ -45,6 +45,6 @@ export function fetchOpenAnnotation(projectId: number) {
   return request.post<Api.DataGen.OpenAnnotationResponse>({
     url: `/api/projects/${projectId}/open_annotation`,
     timeout: 120000,
-    showErrorMessage: false
+    showErrorMessage: true
   })
 }

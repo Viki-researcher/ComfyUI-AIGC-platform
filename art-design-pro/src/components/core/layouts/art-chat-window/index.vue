@@ -123,7 +123,7 @@
                 <input
                   type="file"
                   class="hidden"
-                  accept=".txt,.md,.pdf,.docx,.doc,.csv,.xlsx,.xls,.png,.jpg,.jpeg,.gif,.webp"
+                  accept=".txt,.md,.pdf,.docx,.doc,.csv,.xlsx,.xls,.png,.jpg,.jpeg,.gif,.webp,.py,.js,.ts,.jsx,.tsx,.java,.cpp,.c,.h,.hpp,.go,.rs,.rb,.php,.sh,.bash,.yaml,.yml,.json,.xml,.html,.css,.scss,.less,.vue,.sql,.toml,.ini,.cfg,.conf,.env"
                   @change="handleFileUpload"
                 />
               </label>
@@ -431,10 +431,22 @@
     </ElDrawer>
 
     <!-- Document preview dialog -->
-    <ElDialog v-model="docPreviewVisible" title="文档预览" width="600px" destroy-on-close>
-      <pre class="max-h-[60vh] overflow-auto whitespace-pre-wrap rounded bg-g-100 p-4 text-sm">{{
-        docPreviewContent
-      }}</pre>
+    <ElDialog
+      v-model="docPreviewVisible"
+      :title="`文档预览 — ${docPreviewFilename}`"
+      width="700px"
+      destroy-on-close
+    >
+      <div
+        v-if="docPreviewLang"
+        class="max-h-[60vh] overflow-auto rounded"
+        v-html="highlightedPreview"
+      />
+      <pre
+        v-else
+        class="max-h-[60vh] overflow-auto whitespace-pre-wrap rounded bg-g-100 p-4 text-sm"
+        >{{ docPreviewContent }}</pre
+      >
     </ElDialog>
   </div>
 </template>
@@ -546,6 +558,51 @@
 
   const docPreviewVisible = ref(false)
   const docPreviewContent = ref('')
+  const docPreviewLang = ref('')
+  const docPreviewFilename = ref('')
+
+  const EXT_TO_LANG: Record<string, string> = {
+    py: 'python',
+    js: 'javascript',
+    ts: 'typescript',
+    jsx: 'javascript',
+    tsx: 'typescript',
+    java: 'java',
+    cpp: 'cpp',
+    c: 'c',
+    h: 'c',
+    hpp: 'cpp',
+    go: 'go',
+    rs: 'rust',
+    rb: 'ruby',
+    php: 'php',
+    sh: 'bash',
+    bash: 'bash',
+    yaml: 'yaml',
+    yml: 'yaml',
+    json: 'json',
+    xml: 'xml',
+    html: 'xml',
+    css: 'css',
+    scss: 'scss',
+    less: 'less',
+    vue: 'xml',
+    sql: 'sql',
+    toml: 'ini',
+    ini: 'ini',
+    makefile: 'makefile',
+    dockerfile: 'dockerfile'
+  }
+
+  const highlightedPreview = computed(() => {
+    if (!docPreviewLang.value || !docPreviewContent.value) return ''
+    const lang = docPreviewLang.value
+    const highlighted =
+      hljs.getLanguage(lang)
+        ? hljs.highlight(docPreviewContent.value, { language: lang }).value
+        : hljs.highlightAuto(docPreviewContent.value).value
+    return `<pre style="margin:0;border-radius:8px;background:#1e1e2e;overflow:auto"><code class="hljs" style="display:block;padding:1em;color:#cdd6f4;font-size:0.85em;line-height:1.6">${highlighted}</code></pre>`
+  })
 
   /* ─── Markdown rendering ──────────────────────── */
 
@@ -929,12 +986,12 @@
   }
 
   function previewDocument(doc: ChatDocument) {
-    const ext = doc.filename.split('.').pop()?.toLowerCase()
+    const ext = doc.filename.split('.').pop()?.toLowerCase() || ''
     const { accessToken } = useUserStore()
     const headers: Record<string, string> = {}
     if (accessToken) headers['Authorization'] = accessToken
 
-    if (ext === 'pdf' || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext || '')) {
+    if (ext === 'pdf' || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) {
       fetch(`/api/chat/documents/${doc.id}/preview`, { headers })
         .then((r) => r.blob())
         .then((blob) => {
@@ -944,9 +1001,16 @@
         .catch(() => ElMessage.error('预览失败'))
     } else {
       fetch(`/api/chat/documents/${doc.id}/preview`, { headers })
-        .then((r) => r.text())
-        .then((text) => {
-          docPreviewContent.value = text
+        .then((r) => r.json())
+        .then((json) => {
+          if (json.code !== 200) {
+            ElMessage.error(json.msg || '预览失败')
+            return
+          }
+          const data = json.data
+          docPreviewContent.value = data.content
+          docPreviewFilename.value = data.filename || doc.filename
+          docPreviewLang.value = EXT_TO_LANG[data.file_type] || ''
           docPreviewVisible.value = true
         })
         .catch(() => ElMessage.error('预览失败'))
