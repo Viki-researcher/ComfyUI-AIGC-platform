@@ -348,7 +348,7 @@ async def _keyword_search(
     chunks = await DocumentChunk.filter(document_id__in=doc_ids).all()
     import re
 
-    raw_keywords = [w for w in re.split(r'[\s,，。？！?!、；;：:·\-—""''()（）【】\[\]]+', query.lower()) if len(w) >= 2]
+    raw_keywords = [w for w in re.split(r'[\s,，。？！?!、；;：:·\-—\u201c\u201d\u2018\u2019()（）【】\[\]]+', query.lower()) if len(w) >= 2]
     keywords = set(raw_keywords)
     for kw in raw_keywords:
         if len(kw) >= 4:
