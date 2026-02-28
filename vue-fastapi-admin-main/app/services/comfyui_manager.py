@@ -104,16 +104,43 @@ def _instance_dir(cfg: ComfyUIConfig, user_id: int, project_id: int) -> Path:
     return cfg.instance_base_dir / f"u{user_id}" / f"p{project_id}"
 
 
+def _shared_workflows_dir(cfg: ComfyUIConfig) -> Path:
+    """全局共享工作流目录，所有项目、所有用户的 ComfyUI 实例都使用同一份工作流。"""
+    return cfg.instance_base_dir / "_shared_workflows"
+
+
 def _ensure_instance_links(cfg: ComfyUIConfig, inst_dir: Path) -> None:
     """
     ComfyUI 使用 --base-directory 后，会在实例目录下读取 custom_nodes/models 等。
     为了复用仓库内资源，这里在实例目录建立软链接：
     - {inst_dir}/custom_nodes -> {repo_path}/custom_nodes
     - {inst_dir}/models -> {repo_path}/models
+    - {inst_dir}/user/default/workflows -> 全局共享目录（实现工作流跨项目/跨用户复用）
     """
     inst_dir.mkdir(parents=True, exist_ok=True)
-    for d in ("output", "temp", "input", "user"):
+    for d in ("output", "temp", "input"):
         (inst_dir / d).mkdir(parents=True, exist_ok=True)
+
+    # user/default 目录需要单独创建（workflows 将被符号链接替换）
+    user_default = inst_dir / "user" / "default"
+    user_default.mkdir(parents=True, exist_ok=True)
+
+    # 工作流共享：所有实例的 workflows 目录指向同一个全局共享目录
+    shared_wf = _shared_workflows_dir(cfg)
+    shared_wf.mkdir(parents=True, exist_ok=True)
+
+    wf_dst = user_default / "workflows"
+    if not wf_dst.exists() and not wf_dst.is_symlink():
+        try:
+            wf_dst.symlink_to(shared_wf, target_is_directory=True)
+            logger.info(f"[ComfyUI] linked workflows -> {shared_wf}")
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[ComfyUI] failed to symlink workflows, falling back to local dir: {e}")
+            wf_dst.mkdir(parents=True, exist_ok=True)
+    elif wf_dst.is_dir() and not wf_dst.is_symlink():
+        # 已有本地 workflows 目录（旧实例），迁移文件到共享目录后替换为符号链接
+        _migrate_to_shared(wf_dst, shared_wf)
+
     for name in ("custom_nodes", "models"):
         src = cfg.repo_path / name
         dst = inst_dir / name
@@ -126,6 +153,27 @@ def _ensure_instance_links(cfg: ComfyUIConfig, inst_dir: Path) -> None:
             dst.symlink_to(src, target_is_directory=True)
         except Exception as e:  # noqa: BLE001
             raise RuntimeError(f"failed to create symlink: {dst} -> {src} ({e})") from e
+
+
+def _migrate_to_shared(local_wf: Path, shared_wf: Path) -> None:
+    """将旧实例本地的 workflows 文件迁移到共享目录，然后用符号链接替换。"""
+    import shutil
+
+    migrated = 0
+    for f in local_wf.iterdir():
+        dst = shared_wf / f.name
+        if not dst.exists():
+            shutil.copy2(str(f), str(dst))
+            migrated += 1
+
+    # 删除旧目录，替换为符号链接
+    shutil.rmtree(str(local_wf))
+    try:
+        local_wf.symlink_to(shared_wf, target_is_directory=True)
+        logger.info(f"[ComfyUI] migrated {migrated} workflows to shared dir, linked {local_wf} -> {shared_wf}")
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[ComfyUI] migration symlink failed, recreating local dir: {e}")
+        local_wf.mkdir(parents=True, exist_ok=True)
 
 
 def _write_extra_model_paths(cfg: ComfyUIConfig, inst_dir: Path) -> Path:
