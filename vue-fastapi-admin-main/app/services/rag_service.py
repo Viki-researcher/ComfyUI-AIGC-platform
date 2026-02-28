@@ -334,7 +334,7 @@ async def _keyword_search(
     document_ids: list[int] | None,
     top_k: int,
 ) -> list[dict]:
-    """关键词回退搜索（当嵌入不可用时）。"""
+    """关键词回退搜索（当嵌入不可用时）。支持中文文本的模糊匹配。"""
     doc_filter = {"user_id": user_id, "status": "ready"}
     docs = await ChatDocument.filter(**doc_filter).all()
     if document_ids:
@@ -347,18 +347,24 @@ async def _keyword_search(
 
     chunks = await DocumentChunk.filter(document_id__in=doc_ids).all()
     import re
-    keywords = [w for w in re.split(r'[\s,，。？！?!、；;：:]+', query.lower()) if len(w) >= 2]
-    if not keywords:
-        keywords = [query.lower().strip()]
+
+    raw_keywords = [w for w in re.split(r'[\s,，。？！?!、；;：:·\-—""''()（）【】\[\]]+', query.lower()) if len(w) >= 2]
+    keywords = set(raw_keywords)
+    for kw in raw_keywords:
+        if len(kw) >= 4:
+            for i in range(len(kw) - 1):
+                keywords.add(kw[i:i + 2])
+    keywords = list(keywords) or [query.lower().strip()[:6]]
 
     scored = []
     for chunk in chunks:
         content_lower = chunk.content.lower()
         score = sum(1 for kw in keywords if kw in content_lower)
-        if score == 0:
-            score = 1 if query.lower()[:6] in content_lower else 0
         if score > 0:
             scored.append((score, chunk))
+
+    if not scored and chunks:
+        scored = [(1, chunks[0])]
 
     scored.sort(key=lambda x: x[0], reverse=True)
     return [
