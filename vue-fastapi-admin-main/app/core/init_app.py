@@ -191,9 +191,7 @@ async def init_menus():
 
 
 async def init_apis():
-    apis = await api_controller.model.exists()
-    if not apis:
-        await api_controller.refresh_api()
+    await api_controller.refresh_api()
 
 
 async def ensure_menu_auth_marks():
