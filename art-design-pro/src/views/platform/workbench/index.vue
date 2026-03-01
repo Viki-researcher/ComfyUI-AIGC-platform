@@ -299,9 +299,15 @@
   }
 
   const handleDelete = async (p: Api.DataGen.Project) => {
-    await ElMessageBox.confirm(`确认删除项目「${p.name}」吗？`, '提示', { type: 'warning' })
-    await fetchDeleteProject(p.id)
-    await loadProjects()
+    try {
+      await ElMessageBox.confirm(`确认删除项目「${p.name}」吗？`, '提示', { type: 'warning' })
+      await fetchDeleteProject(p.id)
+      projects.value = projects.value.filter((item) => item.id !== p.id)
+    } catch (e: any) {
+      if (e !== 'cancel' && e?.message !== 'cancel') {
+        ElMessage.error(e?.message || '删除失败')
+      }
+    }
   }
 </script>
 

@@ -330,8 +330,11 @@ async def ensure_role_policies():
     if user_menus:
         await user_role.menus.add(*user_menus)
 
-    # 普通用户 API：基础模块 + 平台业务模块
-    allow_tags = ["基础模块", "项目模块", "日志模块", "统计模块", "监控模块"]
+    # 普通用户 API：基础模块 + 平台业务模块（含仪表盘、Prompt助手、AI对话、工作流等）
+    allow_tags = [
+        "基础模块", "项目模块", "日志模块", "统计模块", "监控模块",
+        "仪表盘模块", "Prompt助手模块", "AI对话", "工作流", "数据集模块",
+    ]
     basic_apis = await Api.filter(Q(tags__in=allow_tags))
     await user_role.apis.clear()
     await user_role.apis.add(*basic_apis)
