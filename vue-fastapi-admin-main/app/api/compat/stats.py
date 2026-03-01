@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import datetime
 from io import BytesIO
-from typing import Optional
 
 from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
@@ -53,36 +52,39 @@ async def get_stats(
 
     rows = await GenerationLog.filter(q).all()
 
-    keys: list[str] = []
     if dimension == "day":
-        keys = [r.timestamp.strftime("%Y-%m-%d") for r in rows]
-        counter = Counter(keys)
-        data = [{"date": k, "count": counter[k]} for k in sorted(counter.keys())]
+        day_counts: dict[str, int] = defaultdict(int)
+        for r in rows:
+            day = r.timestamp.strftime("%Y-%m-%d")
+            day_counts[day] += r.image_count
+        data = [{"date": k, "count": day_counts[k]} for k in sorted(day_counts.keys())]
     elif dimension == "project":
-        keys = [str(r.project_id) for r in rows]
-        counter = Counter(keys)
-        ids = [int(k) for k in counter.keys()]
+        proj_counts: dict[int, int] = defaultdict(int)
+        for r in rows:
+            proj_counts[r.project_id] += r.image_count
+        ids = list(proj_counts.keys())
         projects = {p.id: p for p in await Project.filter(id__in=ids).all()} if ids else {}
         data = [
             {
-                "project_id": int(k),
-                "project_name": projects.get(int(k)).name if int(k) in projects else "",
-                "count": counter[k],
+                "project_id": pid,
+                "project_name": projects.get(pid).name if pid in projects else "",
+                "count": proj_counts[pid],
             }
-            for k in sorted(counter.keys(), key=int)
+            for pid in sorted(proj_counts.keys())
         ]
     elif dimension == "user":
-        keys = [str(r.user_id) for r in rows]
-        counter = Counter(keys)
-        ids = [int(k) for k in counter.keys()]
+        user_counts: dict[int, int] = defaultdict(int)
+        for r in rows:
+            user_counts[r.user_id] += r.image_count
+        ids = list(user_counts.keys())
         users = {u.id: u for u in await User.filter(id__in=ids).all()} if ids else {}
         data = [
             {
-                "user_id": int(k),
-                "user_name": users.get(int(k)).username if int(k) in users else "",
-                "count": counter[k],
+                "user_id": uid,
+                "user_name": users.get(uid).username if uid in users else "",
+                "count": user_counts[uid],
             }
-            for k in sorted(counter.keys(), key=int)
+            for uid in sorted(user_counts.keys())
         ]
     else:
         data = []
@@ -111,7 +113,7 @@ async def get_stats_trend(
         for r in rows:
             day = r.timestamp.strftime("%Y-%m-%d")
             dates_set.add(day)
-            series_map[str(r.project_id)][day] += 1
+            series_map[str(r.project_id)][day] += r.image_count
         ids = [int(k) for k in series_map.keys()]
         projects = {p.id: p for p in await Project.filter(id__in=ids).all()} if ids else {}
         name_map = {str(pid): projects[pid].name if pid in projects else f"项目{pid}" for pid in ids}
@@ -119,7 +121,7 @@ async def get_stats_trend(
         for r in rows:
             day = r.timestamp.strftime("%Y-%m-%d")
             dates_set.add(day)
-            series_map[str(r.user_id)][day] += 1
+            series_map[str(r.user_id)][day] += r.image_count
         ids = [int(k) for k in series_map.keys()]
         users = {u.id: u for u in await User.filter(id__in=ids).all()} if ids else {}
         name_map = {str(uid): users[uid].username if uid in users else f"用户{uid}" for uid in ids}
@@ -163,25 +165,29 @@ async def export_stats(
 
     if dimension == "day":
         ws.append(["date", "count"])
-        counter = Counter([r.timestamp.strftime("%Y-%m-%d") for r in rows])
-        for k in sorted(counter.keys()):
-            ws.append([k, counter[k]])
+        day_counts: dict[str, int] = defaultdict(int)
+        for r in rows:
+            day_counts[r.timestamp.strftime("%Y-%m-%d")] += r.image_count
+        for k in sorted(day_counts.keys()):
+            ws.append([k, day_counts[k]])
     elif dimension == "project":
         ws.append(["project_id", "project_name", "count"])
-        counter = Counter([str(r.project_id) for r in rows])
-        ids = [int(k) for k in counter.keys()]
+        proj_counts: dict[int, int] = defaultdict(int)
+        for r in rows:
+            proj_counts[r.project_id] += r.image_count
+        ids = list(proj_counts.keys())
         projects = {p.id: p for p in await Project.filter(id__in=ids).all()} if ids else {}
-        for k in sorted(counter.keys(), key=int):
-            pid = int(k)
-            ws.append([pid, projects.get(pid).name if pid in projects else "", counter[k]])
+        for pid in sorted(proj_counts.keys()):
+            ws.append([pid, projects.get(pid).name if pid in projects else "", proj_counts[pid]])
     elif dimension == "user":
         ws.append(["user_id", "user_name", "count"])
-        counter = Counter([str(r.user_id) for r in rows])
-        ids = [int(k) for k in counter.keys()]
+        user_counts: dict[int, int] = defaultdict(int)
+        for r in rows:
+            user_counts[r.user_id] += r.image_count
+        ids = list(user_counts.keys())
         users = {u.id: u for u in await User.filter(id__in=ids).all()} if ids else {}
-        for k in sorted(counter.keys(), key=int):
-            uid = int(k)
-            ws.append([uid, users.get(uid).username if uid in users else "", counter[k]])
+        for uid in sorted(user_counts.keys()):
+            ws.append([uid, users.get(uid).username if uid in users else "", user_counts[uid]])
     else:
         ws.append(["key", "count"])
 
@@ -191,10 +197,9 @@ async def export_stats(
 
     suffix = f"{(start_date or 'all').replace('-','')}_{(end_date or 'all').replace('-','')}"
     filename = f"stats_{dimension}_{suffix}.xlsx"
-    headers = {"Content-Disposition": f'attachment; filename=\"{filename}\"'}
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
     return StreamingResponse(
         buf,
         headers=headers,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
-

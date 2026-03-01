@@ -53,6 +53,7 @@ class GenerationLog(BaseModel, TimestampMixin):
     status = fields.CharField(max_length=20, description="状态(成功/失败等)", index=True)
     prompt_id = fields.CharField(max_length=64, null=True, description="ComfyUI prompt_id", index=True)
     concurrent_id = fields.BigIntField(null=True, description="并发ID", index=True)
+    image_count = fields.IntField(default=1, description="本次生成的图片数量")
     details = fields.JSONField(null=True, description="详情(错误/耗时等)")
 
     class Meta:

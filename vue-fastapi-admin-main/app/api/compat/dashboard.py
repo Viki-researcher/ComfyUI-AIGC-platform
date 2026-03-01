@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter
+from tortoise.functions import Sum
 
 from app.core.dependency import DependPermission
 from app.models.admin import User
@@ -18,18 +19,25 @@ async def get_dashboard():
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     total_projects = await Project.all().count()
-    total_logs = await GenerationLog.all().count()
-    today_logs = await GenerationLog.filter(timestamp__gte=today_start).count()
-    success_logs = await GenerationLog.filter(status="成功").count()
     total_users = await User.all().count()
+
+    agg_all = await GenerationLog.all().annotate(total=Sum("image_count")).values("total")
+    total_logs = agg_all[0]["total"] or 0 if agg_all else 0
+
+    agg_today = await GenerationLog.filter(timestamp__gte=today_start).annotate(total=Sum("image_count")).values("total")
+    today_logs = agg_today[0]["total"] or 0 if agg_today else 0
+
+    agg_success = await GenerationLog.filter(status="成功").annotate(total=Sum("image_count")).values("total")
+    success_logs = agg_success[0]["total"] or 0 if agg_success else 0
 
     online_comfy = await ComfyUIService.filter(status="online").count()
     online_annotation = await AnnotationService.filter(status="online").count()
 
     yesterday_start = today_start - timedelta(days=1)
-    yesterday_logs = await GenerationLog.filter(
+    agg_yesterday = await GenerationLog.filter(
         timestamp__gte=yesterday_start, timestamp__lt=today_start
-    ).count()
+    ).annotate(total=Sum("image_count")).values("total")
+    yesterday_logs = agg_yesterday[0]["total"] or 0 if agg_yesterday else 0
 
     return Success(data={
         "today_count": today_logs,

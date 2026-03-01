@@ -18,6 +18,7 @@ class ComfyCallbackIn(BaseModel):
     prompt_id: Optional[str] = Field(None, description="ComfyUI prompt_id")
     status: str = Field(..., description="状态(成功/失败等)")
     concurrent_id: Optional[int] = Field(None, description="并发ID")
+    image_count: int = Field(1, description="本次生成的图片数量")
     details: Optional[Any] = Field(None, description="详情(错误/耗时等)")
     timestamp: Optional[datetime] = Field(None, description="生成时间(可选，默认当前时间)")
 
@@ -42,6 +43,7 @@ async def comfy_callback(req_in: ComfyCallbackIn, x_platform_secret: str | None 
         status=req_in.status,
         prompt_id=req_in.prompt_id,
         concurrent_id=req_in.concurrent_id,
+        image_count=req_in.image_count,
         details=req_in.details,
     )
 
@@ -53,6 +55,6 @@ async def comfy_callback(req_in: ComfyCallbackIn, x_platform_secret: str | None 
             "timestamp": ts.strftime(settings.DATETIME_FORMAT),
             "status": obj.status,
             "prompt_id": obj.prompt_id,
+            "image_count": obj.image_count,
         }
     )
-

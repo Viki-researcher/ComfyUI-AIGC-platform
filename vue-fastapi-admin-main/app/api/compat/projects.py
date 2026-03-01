@@ -113,10 +113,12 @@ async def list_projects(
     owner_map = {int(r["id"]): r["username"] for r in owner_rows}
 
     from app.models.platform import GenerationLog
+    from tortoise.functions import Sum
     project_ids = [p.id for p in rows]
     gen_counts = {}
     for pid in project_ids:
-        gen_counts[pid] = await GenerationLog.filter(project_id=pid, status="成功").count()
+        agg = await GenerationLog.filter(project_id=pid, status="成功").annotate(total=Sum("image_count")).values("total")
+        gen_counts[pid] = agg[0]["total"] or 0 if agg else 0
 
     comfy_map = {}
     ann_map = {}
@@ -207,7 +209,9 @@ async def open_comfy(project_id: int, request: Request):
         return Fail(code=403, msg="无操作权限")
 
     from app.models.platform import GenerationLog
-    gen_count = await GenerationLog.filter(project_id=project_id, status="成功").count()
+    from tortoise.functions import Sum
+    agg = await GenerationLog.filter(project_id=project_id, status="成功").annotate(total=Sum("image_count")).values("total")
+    gen_count = agg[0]["total"] or 0 if agg else 0
     if project.target_count and gen_count >= project.target_count:
         return Fail(
             code=400,
