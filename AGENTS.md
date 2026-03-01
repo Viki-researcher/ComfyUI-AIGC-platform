@@ -24,9 +24,16 @@ COMFYUI_REPO_PATH=/workspace/ComfyUI-master-fitow \
 COMFYUI_PYTHON=/usr/bin/python3 \
 COMFYUI_FORCE_CPU=true \
 ANNOTATION_TOOL_PATH=/workspace/sam3-annotation-tool \
+PLATFORM_INTERNAL_SECRET=platform_secret_key_2026 \
+LLM_API_KEY=<your-llm-api-key> \
+LLM_API_BASE_URL=<your-llm-base-url> \
+LLM_PROVIDER=<your-llm-provider> \
+LLM_MODEL=<your-llm-model> \
 PYTHONUNBUFFERED=1 \
 python3 -m uvicorn app:app --host 0.0.0.0 --port 9999
 ```
+
+LLM env vars can also be set in `vue-fastapi-admin-main/.env` (pydantic-settings auto-loads it). However, **Cloud Agent injected secrets take precedence** over `.env` file values, so always pass LLM vars explicitly on the command line if injected secrets conflict.
 
 For quick dev without PostgreSQL, use SQLite:
 ```bash
@@ -55,6 +62,10 @@ The Vite dev server proxies `/api` requests to the backend at `http://127.0.0.1:
 - **Backend pip installs to `~/.local/bin`**: Ensure `$HOME/.local/bin` is on `PATH` for `uvicorn`, `ruff`, `aerich`, etc.
 - **Pre-existing lint issues**: Both frontend (19 prettier/prettier formatting errors) and backend (4 ruff F841 unused-variable warnings) have pre-existing lint issues that are not blockers.
 - **Login API field name**: The login endpoint `POST /api/auth/login` expects `userName` (camelCase), not `username`.
+- **API route registration**: `init_apis()` now always refreshes the API table on startup. If you add new API routes/tags, they will be auto-registered on next backend restart. No manual intervention needed.
+- **Cloud Agent injected secrets**: The Cloud Agent may inject `LLM_API_KEY`, `LLM_MODEL`, `LLM_PROVIDER` env vars that override `.env` file values. Always pass correct LLM config explicitly in the backend startup command.
+- **image_count field**: `GenerationLog` has an `image_count` field (default=1). The history sync auto-parses ComfyUI output to count actual images. Dashboard/stats use `SUM(image_count)` for accurate totals.
+- **Image output organization**: Generated images are auto-organized to `{output_dir}/{project_name}/{YYYYMMDD}/` by the history sync.
 
 ### Lint commands
 
