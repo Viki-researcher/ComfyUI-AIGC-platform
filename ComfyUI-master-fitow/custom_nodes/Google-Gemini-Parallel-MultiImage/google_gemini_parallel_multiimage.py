@@ -5,6 +5,8 @@
 # API 地址固定为 https://147ai.com
 # ============================================================================
 
+import os
+import threading
 import torch
 from PIL import Image
 from io import BytesIO
@@ -20,6 +22,42 @@ def _log(step: str, msg: str = ""):
     """统一格式的步骤日志"""
     line = f"{LOG_PREFIX} [{step}] {msg}".strip()
     print(line)
+
+
+def _send_platform_callback(image_count: int, status: str, details: dict | None = None):
+    """向平台后端发送生成完成的回调，报告本次生成的图片数量。"""
+    callback_url = os.environ.get("PLATFORM_CALLBACK_URL", "")
+    secret = os.environ.get("PLATFORM_CALLBACK_SECRET", "")
+    project_id = os.environ.get("PLATFORM_PROJECT_ID", "")
+
+    if not callback_url or not project_id:
+        return
+
+    def _do_callback():
+        try:
+            import urllib.request
+            import json as _json
+            payload = _json.dumps({
+                "project_id": int(project_id),
+                "status": status,
+                "image_count": image_count,
+                "details": details,
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                callback_url,
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Platform-Secret": secret,
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                _log("callback", f"回调成功: status={resp.status}")
+        except Exception as e:
+            _log("callback", f"回调失败: {e}")
+
+    threading.Thread(target=_do_callback, daemon=True).start()
 
 
 def pil2tensor(image):
@@ -262,6 +300,7 @@ class ComfyUI_Gemini_Parallel_MultiImage:
             _log("step_5", f"所有任务执行完毕，成功 {len(successful_results)}，失败 {len(tasks) - len(successful_results)}")
 
             if successful_results:
+                total_images = sum(t.shape[0] for t in successful_results)
                 final_tensor = torch.cat(successful_results, dim=0)
                 response_info = "🎉 Parallel multi-image generation completed!\n"
                 response_info += f"Input images: {image_count}\n"
@@ -274,7 +313,20 @@ class ComfyUI_Gemini_Parallel_MultiImage:
                 )
                 for result in sorted_results:
                     response_info += f"{result[1]}\n\n"
-                _log("step_6", "汇总结果并返回图像与响应文本")
+                _log("step_6", f"汇总结果：共 {total_images} 张图片")
+
+                _send_platform_callback(
+                    image_count=total_images,
+                    status="成功",
+                    details={
+                        "model": model,
+                        "mode": mode,
+                        "generation_count": generation_count,
+                        "successful_tasks": len(successful_results),
+                        "total_images": total_images,
+                    },
+                )
+
                 pbar.update_absolute(100)
                 return (final_tensor, response_info.strip())
             else:
@@ -283,6 +335,13 @@ class ComfyUI_Gemini_Parallel_MultiImage:
                 for result in results:
                     error_msg += f"{result[1]}\n"
                 print(error_msg)
+
+                _send_platform_callback(
+                    image_count=0,
+                    status="失败",
+                    details={"error": "All parallel tasks failed"},
+                )
+
                 blank_image = Image.new('RGB', (1024, 1024), color='white')
                 pbar.update_absolute(100)
                 return (pil2tensor(blank_image), error_msg)
