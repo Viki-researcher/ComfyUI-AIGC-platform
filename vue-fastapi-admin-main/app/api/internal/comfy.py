@@ -6,11 +6,20 @@ from typing import Any, Optional
 from fastapi import APIRouter, Header
 from pydantic import BaseModel, Field
 
-from app.models.platform import ComfyUIService, GenerationLog
+from app.log import logger
+from app.models.platform import ComfyUIService
 from app.schemas.base import Fail, Success
 from app.settings.config import settings
 
 router = APIRouter(prefix="/comfy", tags=["内部回调"])
+
+# 缓存节点回调的 image_count，供 history sync 创建条目时使用，避免重复计数
+_callback_cache: dict[int, dict[str, Any]] = {}
+
+
+def get_callback_cache(project_id: int) -> dict[str, Any] | None:
+    """供 history sync 查询某项目最近一次回调数据。查询后清除。"""
+    return _callback_cache.pop(project_id, None)
 
 
 class ComfyCallbackIn(BaseModel):
@@ -35,26 +44,23 @@ async def comfy_callback(req_in: ComfyCallbackIn, x_platform_secret: str | None 
     if not svc:
         return Fail(code=404, msg="service not found")
 
-    ts = req_in.timestamp or datetime.now()
-    obj = await GenerationLog.create(
-        user_id=svc.user_id,
-        project_id=req_in.project_id,
-        timestamp=ts,
-        status=req_in.status,
-        prompt_id=req_in.prompt_id,
-        concurrent_id=req_in.concurrent_id,
-        image_count=req_in.image_count,
-        details=req_in.details,
+    _callback_cache[req_in.project_id] = {
+        "image_count": req_in.image_count,
+        "status": req_in.status,
+        "details": req_in.details,
+        "timestamp": req_in.timestamp or datetime.now(),
+    }
+    logger.info(
+        f"[ComfyUI] callback cached: project={req_in.project_id} "
+        f"image_count={req_in.image_count} status={req_in.status}"
     )
 
     return Success(
         data={
-            "id": obj.id,
-            "project_id": obj.project_id,
-            "user_id": obj.user_id,
-            "timestamp": ts.strftime(settings.DATETIME_FORMAT),
-            "status": obj.status,
-            "prompt_id": obj.prompt_id,
-            "image_count": obj.image_count,
+            "project_id": req_in.project_id,
+            "user_id": svc.user_id,
+            "image_count": req_in.image_count,
+            "status": req_in.status,
+            "cached": True,
         }
     )

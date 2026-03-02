@@ -111,6 +111,9 @@ async def sync_once(*, max_items: int = 50) -> int:
         project = await Project.filter(id=s.project_id).first()
         project_name = project.name if project else f"project_{s.project_id}"
 
+        from app.api.internal.comfy import get_callback_cache
+        cb_data = get_callback_cache(s.project_id)
+
         for prompt_id, item in history.items():
             if not prompt_id:
                 continue
@@ -122,6 +125,9 @@ async def sync_once(*, max_items: int = 50) -> int:
             status_str, extra = _map_status(item_dict)
             image_count = _count_output_images(item_dict)
             output_files = _collect_output_files(item_dict)
+
+            if cb_data and cb_data.get("image_count", 0) > image_count:
+                image_count = cb_data["image_count"]
 
             if output_files and s.base_dir:
                 _organize_output_images(s.base_dir, project_name, output_files)

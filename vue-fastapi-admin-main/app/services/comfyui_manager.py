@@ -129,6 +129,17 @@ def _ensure_instance_links(cfg: ComfyUIConfig, inst_dir: Path) -> None:
     shared_wf = _shared_workflows_dir(cfg)
     shared_wf.mkdir(parents=True, exist_ok=True)
 
+    # 将仓库中预置的工作流同步到共享目录（仅复制不存在的文件，不覆盖用户修改）
+    repo_wf = cfg.repo_path / "user" / "default" / "workflows"
+    if repo_wf.is_dir():
+        import shutil as _shutil
+        for wf_file in repo_wf.iterdir():
+            if wf_file.is_file() and wf_file.suffix == ".json":
+                dst_file = shared_wf / wf_file.name
+                if not dst_file.exists():
+                    _shutil.copy2(str(wf_file), str(dst_file))
+                    logger.info(f"[ComfyUI] synced preset workflow: {wf_file.name}")
+
     wf_dst = user_default / "workflows"
     if not wf_dst.exists() and not wf_dst.is_symlink():
         try:
