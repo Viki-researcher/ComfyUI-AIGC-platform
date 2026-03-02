@@ -3,11 +3,12 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Header, Query
 from pydantic import BaseModel, Field
+from tortoise.functions import Sum
 
 from app.log import logger
-from app.models.platform import ComfyUIService
+from app.models.platform import ComfyUIService, GenerationLog, Project
 from app.schemas.base import Fail, Success
 from app.settings.config import settings
 
@@ -64,3 +65,35 @@ async def comfy_callback(req_in: ComfyCallbackIn, x_platform_secret: str | None 
             "cached": True,
         }
     )
+
+
+@router.get("/check_quota", summary="检查项目生成配额（供 ComfyUI 节点调用）")
+async def check_quota(
+    project_id: int = Query(..., description="项目ID"),
+    x_platform_secret: str | None = Header(default=None),
+):
+    """ComfyUI 自定义节点在执行前调用此接口，检查是否已达到生成上限。"""
+    secret = settings.PLATFORM_INTERNAL_SECRET
+    if secret and (not x_platform_secret or x_platform_secret != secret):
+        return Fail(code=403, msg="invalid secret")
+
+    project = await Project.filter(id=project_id).first()
+    if not project:
+        return Fail(code=404, msg="项目不存在")
+
+    agg = await GenerationLog.filter(
+        project_id=project_id, status="成功"
+    ).annotate(total=Sum("image_count")).values("total")
+    generated = agg[0]["total"] or 0 if agg else 0
+
+    exceeded = project.target_count > 0 and generated >= project.target_count
+    remaining = max(0, project.target_count - generated) if project.target_count > 0 else -1
+
+    return Success(data={
+        "project_id": project_id,
+        "project_name": project.name,
+        "generated": generated,
+        "target": project.target_count,
+        "remaining": remaining,
+        "exceeded": exceeded,
+    })

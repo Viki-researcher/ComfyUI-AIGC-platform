@@ -61,7 +61,11 @@ def _organize_output_images(
     project_name: str,
     output_files: list[dict[str, str]],
 ) -> int:
-    """将 ComfyUI 输出图片移动到 {base_dir}/output/{project_name}/{YYYYMMDD}/ 目录。返回移动的文件数。"""
+    """
+    将 ComfyUI 输出图片复制到统一输出目录 {OUTPUT_BASE_DIR}/{project_name}/{YYYYMMDD}/。
+    同时在实例 output 目录下也按项目名/日期组织（向后兼容）。
+    返回处理的文件数。
+    """
     if not base_dir or not output_files:
         return 0
 
@@ -69,26 +73,43 @@ def _organize_output_images(
     if not source_output.exists():
         return 0
 
+    from app.settings.config import settings
+
     date_str = datetime.now().strftime("%Y%m%d")
     safe_name = "".join(c if c.isalnum() or c in "-_ " else "_" for c in project_name).strip()
-    target_dir = source_output / safe_name / date_str
-    target_dir.mkdir(parents=True, exist_ok=True)
 
-    moved = 0
+    output_base = Path(settings.OUTPUT_BASE_DIR)
+    if not output_base.is_absolute():
+        output_base = Path(settings.BASE_DIR) / output_base
+    unified_dir = output_base / safe_name / date_str
+    unified_dir.mkdir(parents=True, exist_ok=True)
+
+    inst_dir = source_output / safe_name / date_str
+    inst_dir.mkdir(parents=True, exist_ok=True)
+
+    processed = 0
     for finfo in output_files:
         fname = finfo["filename"]
         subfolder = finfo.get("subfolder", "")
         src = source_output / subfolder / fname if subfolder else source_output / fname
-        if src.exists() and src.is_file():
-            dst = target_dir / fname
-            if dst.exists():
-                continue
-            try:
-                shutil.move(str(src), str(dst))
-                moved += 1
-            except Exception as e:  # noqa: BLE001
-                logger.warning(f"[ComfyUI] move file failed: {src} -> {dst} ({e})")
-    return moved
+        if not src.exists() or not src.is_file():
+            continue
+
+        for dst_dir in (inst_dir, unified_dir):
+            dst = dst_dir / fname
+            if not dst.exists():
+                try:
+                    shutil.copy2(str(src), str(dst))
+                except Exception as e:  # noqa: BLE001
+                    logger.warning(f"[ComfyUI] copy file failed: {src} -> {dst} ({e})")
+
+        try:
+            src.unlink()
+        except Exception:  # noqa: BLE001
+            pass
+        processed += 1
+
+    return processed
 
 
 async def sync_once(*, max_items: int = 50) -> int:

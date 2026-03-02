@@ -24,6 +24,48 @@ def _log(step: str, msg: str = ""):
     print(line)
 
 
+def _check_quota() -> tuple[bool, str]:
+    """
+    在执行生成前检查平台项目配额。
+    返回 (allowed, message)。如果后端不可达或未配置则允许执行。
+    """
+    callback_url = os.environ.get("PLATFORM_CALLBACK_URL", "")
+    secret = os.environ.get("PLATFORM_CALLBACK_SECRET", "")
+    project_id = os.environ.get("PLATFORM_PROJECT_ID", "")
+
+    if not callback_url or not project_id:
+        return True, ""
+
+    base_url = callback_url.rsplit("/callback", 1)[0]
+    check_url = f"{base_url}/check_quota?project_id={project_id}"
+
+    try:
+        import urllib.request
+        import json as _json
+        req = urllib.request.Request(
+            check_url,
+            headers={"X-Platform-Secret": secret},
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = _json.loads(resp.read().decode("utf-8"))
+            if data.get("code") == 200:
+                info = data.get("data", {})
+                if info.get("exceeded"):
+                    generated = info.get("generated", 0)
+                    target = info.get("target", 0)
+                    name = info.get("project_name", "")
+                    return False, (
+                        f"⛔ 项目「{name}」已达到生成上限 "
+                        f"({generated}/{target} 张)，"
+                        f"请在平台编辑项目调整目标数量后继续。"
+                    )
+                return True, ""
+    except Exception as e:
+        _log("check_quota", f"配额检查失败（忽略）: {e}")
+    return True, ""
+
+
 def _send_platform_callback(image_count: int, status: str, details: dict | None = None):
     """向平台后端发送生成完成的回调，报告本次生成的图片数量。"""
     callback_url = os.environ.get("PLATFORM_CALLBACK_URL", "")
@@ -234,6 +276,12 @@ class ComfyUI_Gemini_Parallel_MultiImage:
                           image_size, generation_count, seed=-1,
                           image1=None, image2=None, image3=None, image4=None,
                           image5=None, image6=None, image7=None, image8=None):
+
+        _log("step_0", "检查项目生成配额...")
+        allowed, quota_msg = _check_quota()
+        if not allowed:
+            _log("step_0", quota_msg)
+            raise RuntimeError(quota_msg)
 
         _log("step_1", "节点开始执行：参数校验")
         if not api_key.strip():

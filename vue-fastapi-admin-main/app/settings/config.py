@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     COMFYUI_FORCE_CPU: bool = False
     COMFYUI_HISTORY_SYNC_INTERVAL_SECONDS: int = 10
 
+    # 统一输出目录：所有项目的生成图片集中存放（按 项目名/YYYYMMDD 组织）
+    # 为空时使用 runtime/output
+    OUTPUT_BASE_DIR: str = os.path.join("runtime", "output")
+
     # ComfyUI -> 平台回调（可选）
     PLATFORM_INTERNAL_SECRET: str = ""
     PLATFORM_CALLBACK_URL: str = "http://127.0.0.1:9999/api/internal/comfy/callback"
