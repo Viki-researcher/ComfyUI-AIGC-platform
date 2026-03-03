@@ -48,3 +48,9 @@ export function fetchOpenAnnotation(projectId: number) {
     showErrorMessage: true
   })
 }
+
+export function fetchProjectImages(projectId: number) {
+  return request.get<Api.DataGen.ProjectImagesResponse>({
+    url: `/api/projects/${projectId}/images`
+  })
+}

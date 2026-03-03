@@ -110,6 +110,15 @@
               >
                 删除
               </ElButton>
+              <ElButton
+                type="info"
+                size="small"
+                plain
+                @click="handleOpenImages(p)"
+                v-ripple
+              >
+                打开图像目录
+              </ElButton>
             </div>
           </ElCard>
         </ElCol>
@@ -144,7 +153,8 @@
     fetchGetProjects,
     fetchOpenComfy,
     fetchOpenAnnotation,
-    fetchUpdateProject
+    fetchUpdateProject,
+    fetchProjectImages
   } from '@/api/projects'
   import { useUserStore } from '@/store/modules/user'
   import { ElMessage, ElMessageBox } from 'element-plus'
@@ -295,6 +305,17 @@
       ElMessage.error(e?.message || '启动标注服务失败')
     } finally {
       annotationLoading.value = null
+    }
+  }
+
+  const handleOpenImages = async (p: Api.DataGen.Project) => {
+    try {
+      const res = await fetchProjectImages(p.id)
+      const dir = (res as any)?.dir || p.name
+      const backendBase = import.meta.env.VITE_API_PROXY_URL || ''
+      window.open(`${backendBase}/output/${encodeURIComponent(dir)}/`, '_blank')
+    } catch {
+      ElMessage.info('暂无生成图片')
     }
   }
 

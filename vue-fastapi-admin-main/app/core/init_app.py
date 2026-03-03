@@ -66,7 +66,17 @@ def register_exceptions(app: FastAPI):
 
 
 def register_routers(app: FastAPI, prefix: str = "/api"):
+    from pathlib import Path
+
+    from fastapi.staticfiles import StaticFiles
+
     app.include_router(api_router, prefix=prefix)
+
+    output_base = Path(settings.OUTPUT_BASE_DIR)
+    if not output_base.is_absolute():
+        output_base = Path(settings.BASE_DIR) / output_base
+    output_base.mkdir(parents=True, exist_ok=True)
+    app.mount("/output", StaticFiles(directory=str(output_base)), name="output_files")
 
 
 async def init_superuser():

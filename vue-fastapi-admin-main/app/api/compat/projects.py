@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -12,7 +11,7 @@ from app.core.ctx import CTX_USER_ID
 from app.core.dependency import DependPermission
 from app.log import logger
 from app.models import User
-from app.models.platform import AnnotationService, ComfyUIService, GenerationLog, Project
+from app.models.platform import AnnotationService, ComfyUIService, Project
 from app.services.comfyui_manager import ensure_comfyui_service, stop_pid
 from app.services.annotation_manager import ensure_annotation_service
 from app.schemas.base import Fail, Success
@@ -130,6 +129,9 @@ async def list_projects(
     for svc in await AnnotationService.filter(project_id__in=project_ids).all():
         ann_map[svc.project_id] = svc.status
 
+    def _output_dir_name(name: str) -> str:
+        return "".join(c if c.isalnum() or c in "-_ " else "_" for c in name).strip()
+
     data = [
         {
             "id": p.id,
@@ -142,6 +144,7 @@ async def list_projects(
             "generated_count": gen_counts.get(p.id, 0),
             "comfy_status": comfy_map.get(p.id, "stopped"),
             "annotation_status": ann_map.get(p.id, "stopped"),
+            "output_dir": _output_dir_name(p.name),
             "create_time": _now_str(p.created_at),
             "update_time": _now_str(p.updated_at),
         }
@@ -187,56 +190,29 @@ async def delete_project(project_id: int):
     if project.owner_user_id != user_id:
         return Fail(code=403, msg="无操作权限")
 
-    # 1) 停止并删除 ComfyUI 服务
+    # 1) 停止 ComfyUI 服务进程并删除服务记录
     svc = await ComfyUIService.filter(project_id=project_id).first()
-    if svc:
-        if svc.pid:
-            try:
-                stop_pid(int(svc.pid))
-            except Exception as e:  # noqa: BLE001
-                logger.warning(f"[Project] stop ComfyUI pid={svc.pid} failed: {e}")
-        if svc.base_dir:
-            _cleanup_dir(svc.base_dir, f"ComfyUI instance dir for project {project_id}")
+    if svc and svc.pid:
+        try:
+            stop_pid(int(svc.pid))
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[Project] stop ComfyUI pid={svc.pid} failed: {e}")
     await ComfyUIService.filter(project_id=project_id).delete()
 
-    # 2) 停止并删除标注服务
+    # 2) 停止标注服务进程并删除服务记录
     ann_svc = await AnnotationService.filter(project_id=project_id).first()
-    if ann_svc:
-        if ann_svc.pid:
-            try:
-                stop_pid(int(ann_svc.pid))
-            except Exception as e:  # noqa: BLE001
-                logger.warning(f"[Project] stop Annotation pid={ann_svc.pid} failed: {e}")
+    if ann_svc and ann_svc.pid:
+        try:
+            stop_pid(int(ann_svc.pid))
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[Project] stop Annotation pid={ann_svc.pid} failed: {e}")
     await AnnotationService.filter(project_id=project_id).delete()
 
-    # 3) 删除该项目的所有生成日志
-    deleted_logs = await GenerationLog.filter(project_id=project_id).delete()
-    logger.info(f"[Project] deleted {deleted_logs} generation logs for project {project_id}")
+    # 注意：保留 GenerationLog 和 output 图片目录，不做清理
 
-    # 4) 删除统一输出目录中该项目的图片文件夹
-    safe_name = "".join(
-        c if c.isalnum() or c in "-_ " else "_" for c in project.name
-    ).strip()
-    output_base = Path(settings.OUTPUT_BASE_DIR)
-    if not output_base.is_absolute():
-        output_base = Path(settings.BASE_DIR) / output_base
-    project_output = output_base / safe_name
-    _cleanup_dir(str(project_output), f"output dir for project '{project.name}'")
-
-    # 5) 删除项目记录
+    # 3) 删除项目记录
     await Project.filter(id=project_id).delete()
     return Success(msg="Deleted")
-
-
-def _cleanup_dir(dir_path: str, desc: str) -> None:
-    """安全删除目录（忽略错误）。"""
-    p = Path(dir_path)
-    if p.exists() and p.is_dir():
-        try:
-            shutil.rmtree(str(p))
-            logger.info(f"[Project] cleaned up {desc}: {p}")
-        except Exception as e:  # noqa: BLE001
-            logger.warning(f"[Project] cleanup failed for {desc}: {p} ({e})")
 
 
 @router.post("/{project_id}/open_comfy", summary="打开/启动 ComfyUI 服务", dependencies=[DependPermission])
@@ -293,4 +269,30 @@ async def open_annotation(project_id: int, request: Request):
 
     public_url = _get_public_comfy_url(port=int(svc.port), request=request)
     return Success(data=OpenAnnotationOut(annotation_url=public_url).model_dump())
+
+
+@router.get("/{project_id}/images", summary="列出项目生成图片", dependencies=[DependPermission])
+async def list_project_images(project_id: int):
+    project = await Project.filter(id=project_id).first()
+    if not project:
+        return Fail(code=404, msg="项目不存在")
+
+    safe_name = "".join(c if c.isalnum() or c in "-_ " else "_" for c in project.name).strip()
+    output_base = Path(settings.OUTPUT_BASE_DIR)
+    if not output_base.is_absolute():
+        output_base = Path(settings.BASE_DIR) / output_base
+    project_dir = output_base / safe_name
+
+    files = []
+    if project_dir.exists():
+        for f in sorted(project_dir.rglob("*"), reverse=True):
+            if f.is_file() and f.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"):
+                rel = f.relative_to(project_dir)
+                files.append({
+                    "name": f.name,
+                    "path": str(rel),
+                    "size": f.stat().st_size,
+                    "date": f.parent.name,
+                })
+    return Success(data={"project_name": project.name, "dir": safe_name, "files": files, "total": len(files)})
 

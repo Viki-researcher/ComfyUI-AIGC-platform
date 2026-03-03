@@ -62,8 +62,9 @@ def _organize_output_images(
     output_files: list[dict[str, str]],
 ) -> int:
     """
-    将 ComfyUI 输出图片移动到统一输出目录 {OUTPUT_BASE_DIR}/{project_name}/{YYYYMMDD}/。
-    只保存一份到统一目录，原始文件从实例 output 目录删除。
+    将 ComfyUI 输出图片复制到统一输出目录 {OUTPUT_BASE_DIR}/{project_name}/{YYYYMMDD}/。
+    文件重命名为 {项目名}_{时间戳}_{原名}.png 避免覆盖。
+    保留原始文件不动（ComfyUI 预览和 Assets 面板需要读取它们）。
     返回处理的文件数。
     """
     if not base_dir or not output_files:
@@ -84,6 +85,8 @@ def _organize_output_images(
     unified_dir = output_base / safe_name / date_str
     unified_dir.mkdir(parents=True, exist_ok=True)
 
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+
     processed = 0
     for finfo in output_files:
         fname = finfo["filename"]
@@ -92,19 +95,22 @@ def _organize_output_images(
         if not src.exists() or not src.is_file():
             continue
 
-        dst = unified_dir / fname
-        if not dst.exists():
-            try:
-                shutil.move(str(src), str(dst))
-                processed += 1
-            except Exception as e:  # noqa: BLE001
-                logger.warning(f"[ComfyUI] move file failed: {src} -> {dst} ({e})")
-        else:
-            try:
-                src.unlink()
-            except Exception:  # noqa: BLE001
-                pass
+        stem = Path(fname).stem
+        suffix = Path(fname).suffix
+        new_name = f"{safe_name}_{ts}_{stem}{suffix}"
+        dst = unified_dir / new_name
+
+        idx = 1
+        while dst.exists():
+            new_name = f"{safe_name}_{ts}_{stem}_{idx}{suffix}"
+            dst = unified_dir / new_name
+            idx += 1
+
+        try:
+            shutil.copy2(str(src), str(dst))
             processed += 1
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[ComfyUI] copy file failed: {src} -> {dst} ({e})")
 
     return processed
 

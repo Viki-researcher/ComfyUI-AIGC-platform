@@ -172,7 +172,7 @@
   const route = useRoute()
   const isPassing = ref(false)
   const isClickPass = ref(false)
-  const disableDragVerify = import.meta.env.VITE_DISABLE_DRAG_VERIFY === 'true'
+  const disableDragVerify = false
 
   const systemName = AppConfig.systemInfo.name
   const formRef = ref<FormInstance>()
