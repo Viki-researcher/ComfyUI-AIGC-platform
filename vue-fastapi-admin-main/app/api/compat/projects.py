@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import shutil
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Query, Request
@@ -8,8 +10,9 @@ from tortoise.expressions import Q
 
 from app.core.ctx import CTX_USER_ID
 from app.core.dependency import DependPermission
+from app.log import logger
 from app.models import User
-from app.models.platform import AnnotationService, ComfyUIService, Project
+from app.models.platform import AnnotationService, ComfyUIService, GenerationLog, Project
 from app.services.comfyui_manager import ensure_comfyui_service, stop_pid
 from app.services.annotation_manager import ensure_annotation_service
 from app.schemas.base import Fail, Success
@@ -184,18 +187,56 @@ async def delete_project(project_id: int):
     if project.owner_user_id != user_id:
         return Fail(code=403, msg="无操作权限")
 
+    # 1) 停止并删除 ComfyUI 服务
     svc = await ComfyUIService.filter(project_id=project_id).first()
-    if svc and svc.pid:
-        stop_pid(int(svc.pid))
+    if svc:
+        if svc.pid:
+            try:
+                stop_pid(int(svc.pid))
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"[Project] stop ComfyUI pid={svc.pid} failed: {e}")
+        if svc.base_dir:
+            _cleanup_dir(svc.base_dir, f"ComfyUI instance dir for project {project_id}")
     await ComfyUIService.filter(project_id=project_id).delete()
 
+    # 2) 停止并删除标注服务
     ann_svc = await AnnotationService.filter(project_id=project_id).first()
-    if ann_svc and ann_svc.pid:
-        stop_pid(int(ann_svc.pid))
+    if ann_svc:
+        if ann_svc.pid:
+            try:
+                stop_pid(int(ann_svc.pid))
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"[Project] stop Annotation pid={ann_svc.pid} failed: {e}")
     await AnnotationService.filter(project_id=project_id).delete()
 
+    # 3) 删除该项目的所有生成日志
+    deleted_logs = await GenerationLog.filter(project_id=project_id).delete()
+    logger.info(f"[Project] deleted {deleted_logs} generation logs for project {project_id}")
+
+    # 4) 删除统一输出目录中该项目的图片文件夹
+    safe_name = "".join(
+        c if c.isalnum() or c in "-_ " else "_" for c in project.name
+    ).strip()
+    output_base = Path(settings.OUTPUT_BASE_DIR)
+    if not output_base.is_absolute():
+        output_base = Path(settings.BASE_DIR) / output_base
+    project_output = output_base / safe_name
+    _cleanup_dir(str(project_output), f"output dir for project '{project.name}'")
+
+    # 5) 删除项目记录
     await Project.filter(id=project_id).delete()
     return Success(msg="Deleted")
+
+
+def _cleanup_dir(dir_path: str, desc: str) -> None:
+    """安全删除目录（忽略错误）。"""
+    p = Path(dir_path)
+    if p.exists() and p.is_dir():
+        try:
+            shutil.rmtree(str(p))
+            logger.info(f"[Project] cleaned up {desc}: {p}")
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[Project] cleanup failed for {desc}: {p} ({e})")
 
 
 @router.post("/{project_id}/open_comfy", summary="打开/启动 ComfyUI 服务", dependencies=[DependPermission])

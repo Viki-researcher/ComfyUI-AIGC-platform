@@ -62,8 +62,8 @@ def _organize_output_images(
     output_files: list[dict[str, str]],
 ) -> int:
     """
-    将 ComfyUI 输出图片复制到统一输出目录 {OUTPUT_BASE_DIR}/{project_name}/{YYYYMMDD}/。
-    同时在实例 output 目录下也按项目名/日期组织（向后兼容）。
+    将 ComfyUI 输出图片移动到统一输出目录 {OUTPUT_BASE_DIR}/{project_name}/{YYYYMMDD}/。
+    只保存一份到统一目录，原始文件从实例 output 目录删除。
     返回处理的文件数。
     """
     if not base_dir or not output_files:
@@ -84,9 +84,6 @@ def _organize_output_images(
     unified_dir = output_base / safe_name / date_str
     unified_dir.mkdir(parents=True, exist_ok=True)
 
-    inst_dir = source_output / safe_name / date_str
-    inst_dir.mkdir(parents=True, exist_ok=True)
-
     processed = 0
     for finfo in output_files:
         fname = finfo["filename"]
@@ -95,27 +92,36 @@ def _organize_output_images(
         if not src.exists() or not src.is_file():
             continue
 
-        for dst_dir in (inst_dir, unified_dir):
-            dst = dst_dir / fname
-            if not dst.exists():
-                try:
-                    shutil.copy2(str(src), str(dst))
-                except Exception as e:  # noqa: BLE001
-                    logger.warning(f"[ComfyUI] copy file failed: {src} -> {dst} ({e})")
-
-        try:
-            src.unlink()
-        except Exception:  # noqa: BLE001
-            pass
-        processed += 1
+        dst = unified_dir / fname
+        if not dst.exists():
+            try:
+                shutil.move(str(src), str(dst))
+                processed += 1
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"[ComfyUI] move file failed: {src} -> {dst} ({e})")
+        else:
+            try:
+                src.unlink()
+            except Exception:  # noqa: BLE001
+                pass
+            processed += 1
 
     return processed
 
 
-async def sync_once(*, max_items: int = 50) -> int:
+async def sync_once(*, max_items: int = 200) -> int:
     """
     从所有在线服务拉取最新 history，并将新 prompt_id 写入 generation_logs。
-    同时统计每次生成的图片数量并组织输出文件。
+    同时统计每次生成的图片数量，并将输出图片移动到统一输出目录。
+
+    为什么不会丢失记录：
+    - ComfyUI /history 保存在内存中，是**累积**的完整执行记录，不是只保留最近 N 秒的
+    - 即使图像在 1 秒内生成完毕，history 中的记录也会一直保留直到 ComfyUI 进程重启
+    - max_items=200 表示每次最多拉取 200 条，足以覆盖两次轮询间隔内的所有执行
+    - 已同步的 prompt_id 通过数据库去重（unique_together），不会重复写入
+    - 唯一可能丢失的场景：ComfyUI 进程崩溃重启，内存中的 history 被清空
+      → 但此时节点的 platform callback 已经缓存了 image_count 作为补充
+
     返回本次新增的日志条数。
     """
     services = await ComfyUIService.filter(status="online").all()
