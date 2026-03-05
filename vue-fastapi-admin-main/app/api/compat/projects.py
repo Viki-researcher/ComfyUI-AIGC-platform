@@ -12,7 +12,7 @@ from app.core.dependency import DependPermission
 from app.log import logger
 from app.models import User
 from app.models.platform import AnnotationService, ComfyUIService, Project
-from app.services.comfyui_manager import ensure_comfyui_service, stop_pid
+from app.services.comfyui_manager import restart_comfyui_service, stop_pid
 from app.services.annotation_manager import ensure_annotation_service
 from app.schemas.base import Fail, Success
 from app.schemas.platform import OpenAnnotationOut, OpenComfyOut, ProjectCreate, ProjectUpdate
@@ -240,7 +240,7 @@ async def open_comfy(project_id: int, request: Request):
         return Fail(code=403, msg="无操作权限")
 
     try:
-        svc = await ensure_comfyui_service(user_id=user_id, project_id=project_id)
+        svc = await restart_comfyui_service(user_id=user_id, project_id=project_id)
     except Exception as e:  # noqa: BLE001
         return Fail(code=500, msg=f"启动 ComfyUI 失败：{e}")
 

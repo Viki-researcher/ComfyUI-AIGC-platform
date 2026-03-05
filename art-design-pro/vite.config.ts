@@ -48,6 +48,10 @@ export default ({ mode }: { mode: string }) => {
         '/api': {
           target: VITE_API_PROXY_URL,
           changeOrigin: true
+        },
+        '/output': {
+          target: VITE_API_PROXY_URL,
+          changeOrigin: true
         }
       },
       host: true

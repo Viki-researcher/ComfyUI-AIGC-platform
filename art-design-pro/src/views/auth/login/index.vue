@@ -145,7 +145,7 @@
     {
       key: 'super',
       label: t('login.roles.super'),
-      userName: 'Super',
+      userName: 'admin',
       password: '123456',
       roles: ['R_SUPER']
     },
@@ -172,7 +172,7 @@
   const route = useRoute()
   const isPassing = ref(false)
   const isClickPass = ref(false)
-  const disableDragVerify = false
+  const disableDragVerify = import.meta.env.VITE_DISABLE_DRAG_VERIFY === 'true'
 
   const systemName = AppConfig.systemInfo.name
   const formRef = ref<FormInstance>()

@@ -24,7 +24,9 @@ async def get_dashboard():
     agg_all = await GenerationLog.all().annotate(total=Sum("image_count")).values("total")
     total_logs = agg_all[0]["total"] or 0 if agg_all else 0
 
-    agg_today = await GenerationLog.filter(timestamp__gte=today_start).annotate(total=Sum("image_count")).values("total")
+    agg_today = await GenerationLog.filter(
+        timestamp__gte=today_start, status="成功"
+    ).annotate(total=Sum("image_count")).values("total")
     today_logs = agg_today[0]["total"] or 0 if agg_today else 0
 
     agg_success = await GenerationLog.filter(status="成功").annotate(total=Sum("image_count")).values("total")
@@ -35,7 +37,7 @@ async def get_dashboard():
 
     yesterday_start = today_start - timedelta(days=1)
     agg_yesterday = await GenerationLog.filter(
-        timestamp__gte=yesterday_start, timestamp__lt=today_start
+        timestamp__gte=yesterday_start, timestamp__lt=today_start, status="成功"
     ).annotate(total=Sum("image_count")).values("total")
     yesterday_logs = agg_yesterday[0]["total"] or 0 if agg_yesterday else 0
 

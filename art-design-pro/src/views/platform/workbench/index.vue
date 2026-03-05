@@ -63,7 +63,10 @@
 
             <div v-if="p.note" class="line-clamp-1 text-xs text-gray-500 mb-2">{{ p.note }}</div>
 
-            <div v-if="isTargetReached(p)" class="text-xs text-green-600 mb-2 flex items-center gap-1">
+            <div
+              v-if="isTargetReached(p)"
+              class="text-xs text-green-600 mb-2 flex items-center gap-1"
+            >
               <span>✓</span> 已达目标数量，编辑项目可调整上限
             </div>
 
@@ -110,13 +113,7 @@
               >
                 删除
               </ElButton>
-              <ElButton
-                type="info"
-                size="small"
-                plain
-                @click="handleOpenImages(p)"
-                v-ripple
-              >
+              <ElButton type="info" size="small" plain @click="handleOpenImages(p)" v-ripple>
                 打开图像目录
               </ElButton>
             </div>
@@ -126,6 +123,36 @@
 
       <ElEmpty v-if="!loading && projects.length === 0" description="暂无项目" />
     </ElCard>
+
+    <ElDialog
+      v-model="imageDialogVisible"
+      :title="imageDialogTitle"
+      width="80%"
+      top="5vh"
+      append-to-body
+    >
+      <div class="image-gallery" style="max-height: 70vh; overflow-y: auto">
+        <div
+          style="
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 12px;
+          "
+        >
+          <div v-for="img in imageList" :key="img.path" class="text-center">
+            <ElImage
+              :src="img.url"
+              :preview-src-list="imageList.map((i) => i.url)"
+              fit="cover"
+              style="width: 100%; height: 160px; border-radius: 8px; cursor: pointer"
+              lazy
+            />
+            <div class="text-xs text-gray-500 mt-1 truncate" :title="img.name">{{ img.name }}</div>
+          </div>
+        </div>
+        <ElEmpty v-if="imageList.length === 0" description="暂无图片" />
+      </div>
+    </ElDialog>
 
     <ElDialog v-model="dialogVisible" :title="dialogTitle" width="560px" append-to-body>
       <ArtForm
@@ -246,7 +273,12 @@
   const openEditDialog = (p: Api.DataGen.Project) => {
     dialogMode.value = 'edit'
     editingId.value = p.id
-    formModel.value = { name: p.name, code: p.code, note: p.note || '', target_count: p.target_count }
+    formModel.value = {
+      name: p.name,
+      code: p.code,
+      note: p.note || '',
+      target_count: p.target_count
+    }
     dialogVisible.value = true
   }
 
@@ -308,12 +340,28 @@
     }
   }
 
+  const imageDialogVisible = ref(false)
+  const imageDialogTitle = ref('')
+  const imageList = ref<{ name: string; path: string; date: string; url: string }[]>([])
+
   const handleOpenImages = async (p: Api.DataGen.Project) => {
     try {
       const res = await fetchProjectImages(p.id)
-      const dir = (res as any)?.dir || p.name
-      const backendBase = import.meta.env.VITE_API_PROXY_URL || ''
-      window.open(`${backendBase}/output/${encodeURIComponent(dir)}/`, '_blank')
+      const data = res as any
+      const dir = data?.dir || p.name
+      const files: any[] = data?.files || []
+      if (files.length === 0) {
+        ElMessage.info('暂无生成图片')
+        return
+      }
+      imageList.value = files.map((f: any) => ({
+        name: f.name,
+        path: f.path,
+        date: f.date || '',
+        url: `/output/${encodeURIComponent(dir)}/${encodeURIComponent(f.path)}`
+      }))
+      imageDialogTitle.value = `${p.name} — 图像目录 (${files.length} 张)`
+      imageDialogVisible.value = true
     } catch {
       ElMessage.info('暂无生成图片')
     }

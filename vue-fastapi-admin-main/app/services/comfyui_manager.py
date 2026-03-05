@@ -383,6 +383,53 @@ async def ensure_comfyui_service(user_id: int, project_id: int) -> ComfyUIServic
     )
 
 
+async def restart_comfyui_service(user_id: int, project_id: int) -> ComfyUIService:
+    """强制重启 ComfyUI 服务（先同步 history，再停止旧进程，再启动新进程）。"""
+    existing = await ComfyUIService.filter(project_id=project_id).first()
+    if existing and existing.pid:
+        # 重启前先同步一次 history，避免丢失未同步的生成记录
+        if existing.comfy_url and existing.status == "online":
+            try:
+                from app.services.comfyui_history_sync import sync_once
+                await sync_once()
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"[ComfyUI] pre-restart history sync failed: {e}")
+        try:
+            stop_pid(int(existing.pid))
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[ComfyUI] stop old pid failed: {existing.pid} ({e})")
+
+    info = await start_instance(user_id=user_id, project_id=project_id)
+
+    if existing:
+        await existing.update_from_dict(
+            dict(
+                port=info["port"],
+                status="online",
+                comfy_url=info["comfy_url"],
+                last_heartbeat=datetime.now(),
+                pid=info["pid"],
+                base_dir=info["base_dir"],
+                log_path=info["log_path"],
+                start_time=datetime.now(),
+            )
+        ).save()
+        return existing
+
+    return await ComfyUIService.create(
+        user_id=user_id,
+        project_id=project_id,
+        port=info["port"],
+        status="online",
+        comfy_url=info["comfy_url"],
+        last_heartbeat=datetime.now(),
+        pid=info["pid"],
+        base_dir=info["base_dir"],
+        log_path=info["log_path"],
+        start_time=datetime.now(),
+    )
+
+
 async def heartbeat_once() -> None:
     rows = await ComfyUIService.all()
     for s in rows:
