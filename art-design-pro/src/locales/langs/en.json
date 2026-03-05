@@ -6,6 +6,7 @@
     "methodNotAllowed": "Request method not allowed",
     "requestTimeout": "Request timeout, please try again later",
     "internalServerError": "Internal server error, please try again later",
+    "backendUnavailable": "Backend service unavailable, please make sure it is running and refresh",
     "badGateway": "Bad gateway error, please try again later",
     "serviceUnavailable": "Service temporarily unavailable, please try again later",
     "gatewayTimeout": "Gateway timeout, please try again later",

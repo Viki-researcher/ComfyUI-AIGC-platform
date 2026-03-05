@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter
 from tortoise.functions import Sum
@@ -12,10 +12,13 @@ from app.schemas.base import Success
 
 router = APIRouter(prefix="/dashboard", tags=["仪表盘模块"])
 
+_SHANGHAI_TZ = timezone(timedelta(hours=8))
+
 
 @router.get("", summary="仪表盘概览", dependencies=[DependPermission])
 async def get_dashboard():
-    now = datetime.now()
+    # 使用 Asia/Shanghai 时区确保"今日"计算与数据库一致
+    now = datetime.now(_SHANGHAI_TZ)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     total_projects = await Project.all().count()
@@ -25,7 +28,7 @@ async def get_dashboard():
     total_logs = agg_all[0]["total"] or 0 if agg_all else 0
 
     agg_today = await GenerationLog.filter(
-        timestamp__gte=today_start, status="成功"
+        created_at__gte=today_start, status="成功"
     ).annotate(total=Sum("image_count")).values("total")
     today_logs = agg_today[0]["total"] or 0 if agg_today else 0
 
@@ -37,7 +40,7 @@ async def get_dashboard():
 
     yesterday_start = today_start - timedelta(days=1)
     agg_yesterday = await GenerationLog.filter(
-        timestamp__gte=yesterday_start, timestamp__lt=today_start, status="成功"
+        created_at__gte=yesterday_start, created_at__lt=today_start, status="成功"
     ).annotate(total=Sum("image_count")).values("total")
     yesterday_logs = agg_yesterday[0]["total"] or 0 if agg_yesterday else 0
 

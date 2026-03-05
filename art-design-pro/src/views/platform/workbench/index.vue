@@ -114,7 +114,7 @@
                 删除
               </ElButton>
               <ElButton type="info" size="small" plain @click="handleOpenImages(p)" v-ripple>
-                打开图像目录
+                预览图像
               </ElButton>
             </div>
           </ElCard>
@@ -124,34 +124,54 @@
       <ElEmpty v-if="!loading && projects.length === 0" description="暂无项目" />
     </ElCard>
 
+    <!-- 图片预览弹窗 -->
     <ElDialog
       v-model="imageDialogVisible"
       :title="imageDialogTitle"
-      width="80%"
-      top="5vh"
+      width="90%"
+      top="3vh"
       append-to-body
+      @opened="onImageDialogOpened"
+      @closed="onImageDialogClosed"
     >
-      <div class="image-gallery" style="max-height: 70vh; overflow-y: auto">
-        <div
-          style="
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-            gap: 12px;
-          "
-        >
-          <div v-for="img in imageList" :key="img.path" class="text-center">
-            <ElImage
-              :src="img.url"
-              :preview-src-list="imageList.map((i) => i.url)"
-              fit="cover"
-              style="width: 100%; height: 160px; border-radius: 8px; cursor: pointer"
-              lazy
+      <div v-if="imageList.length > 0" class="image-viewer">
+        <div class="image-viewer-main">
+          <button class="nav-btn nav-prev" @click="prevImage" :disabled="currentImageIndex <= 0">
+            ‹
+          </button>
+          <div class="image-viewer-stage">
+            <img
+              :src="imageList[currentImageIndex]?.url"
+              :alt="imageList[currentImageIndex]?.name"
+              class="viewer-img"
             />
-            <div class="text-xs text-gray-500 mt-1 truncate" :title="img.name">{{ img.name }}</div>
+          </div>
+          <button
+            class="nav-btn nav-next"
+            @click="nextImage"
+            :disabled="currentImageIndex >= imageList.length - 1"
+          >
+            ›
+          </button>
+        </div>
+        <div class="image-viewer-info">
+          {{ currentImageIndex + 1 }} / {{ imageList.length }}
+          &nbsp;—&nbsp;
+          {{ imageList[currentImageIndex]?.name }}
+        </div>
+        <div class="image-thumbs">
+          <div
+            v-for="(img, idx) in imageList"
+            :key="img.path"
+            class="thumb-item"
+            :class="{ active: idx === currentImageIndex }"
+            @click="currentImageIndex = idx"
+          >
+            <img :src="img.url" :alt="img.name" />
           </div>
         </div>
-        <ElEmpty v-if="imageList.length === 0" description="暂无图片" />
       </div>
+      <ElEmpty v-else description="暂无图片" />
     </ElDialog>
 
     <ElDialog v-model="dialogVisible" :title="dialogTitle" width="560px" append-to-body>
@@ -343,6 +363,7 @@
   const imageDialogVisible = ref(false)
   const imageDialogTitle = ref('')
   const imageList = ref<{ name: string; path: string; date: string; url: string }[]>([])
+  const currentImageIndex = ref(0)
 
   const handleOpenImages = async (p: Api.DataGen.Project) => {
     try {
@@ -358,14 +379,29 @@
         name: f.name,
         path: f.path,
         date: f.date || '',
-        url: `/output/${encodeURIComponent(dir)}/${encodeURIComponent(f.path)}`
+        url: `/output/${encodeURIComponent(dir)}/${f.path}`
       }))
-      imageDialogTitle.value = `${p.name} — 图像目录 (${files.length} 张)`
+      imageDialogTitle.value = `${p.name} — 图像预览 (${files.length} 张)`
+      currentImageIndex.value = 0
       imageDialogVisible.value = true
     } catch {
       ElMessage.info('暂无生成图片')
     }
   }
+
+  const prevImage = () => {
+    if (currentImageIndex.value > 0) currentImageIndex.value--
+  }
+  const nextImage = () => {
+    if (currentImageIndex.value < imageList.value.length - 1) currentImageIndex.value++
+  }
+
+  const onKeydown = (e: KeyboardEvent) => {
+    if (e.key === 'ArrowLeft') prevImage()
+    else if (e.key === 'ArrowRight') nextImage()
+  }
+  const onImageDialogOpened = () => window.addEventListener('keydown', onKeydown)
+  const onImageDialogClosed = () => window.removeEventListener('keydown', onKeydown)
 
   const handleDelete = async (p: Api.DataGen.Project) => {
     try {
@@ -409,5 +445,99 @@
 
   .status-stopped {
     background-color: #c0c4cc;
+  }
+
+  .image-viewer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .image-viewer-main {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .image-viewer-stage {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 400px;
+    max-height: 60vh;
+    overflow: hidden;
+    background: #f5f7fa;
+    border-radius: 8px;
+  }
+
+  .viewer-img {
+    max-width: 100%;
+    max-height: 60vh;
+    object-fit: contain;
+    border-radius: 4px;
+  }
+
+  .nav-btn {
+    width: 40px;
+    height: 60px;
+    border: 1px solid #dcdfe6;
+    border-radius: 6px;
+    background: #fff;
+    font-size: 24px;
+    cursor: pointer;
+    color: #606266;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+
+  .nav-btn:hover:not(:disabled) {
+    background: #409eff;
+    color: #fff;
+    border-color: #409eff;
+  }
+
+  .nav-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .image-viewer-info {
+    font-size: 13px;
+    color: #909399;
+  }
+
+  .image-thumbs {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    max-width: 100%;
+    padding: 4px 0;
+  }
+
+  .thumb-item {
+    width: 56px;
+    height: 56px;
+    border-radius: 4px;
+    overflow: hidden;
+    cursor: pointer;
+    border: 2px solid transparent;
+    flex-shrink: 0;
+    transition: border-color 0.2s;
+  }
+
+  .thumb-item.active {
+    border-color: #409eff;
+  }
+
+  .thumb-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
 </style>
