@@ -6,6 +6,7 @@
     "methodNotAllowed": "请求方法不允许",
     "requestTimeout": "请求超时，请稍后重试",
     "internalServerError": "服务器内部错误，请稍后重试",
+    "backendUnavailable": "后端服务不可用，请确认后端已启动后刷新页面",
     "badGateway": "网关错误，请稍后重试",
     "serviceUnavailable": "服务暂时不可用，请稍后重试",
     "gatewayTimeout": "网关超时，请稍后重试",

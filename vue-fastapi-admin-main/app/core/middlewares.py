@@ -180,9 +180,15 @@ class HttpAuditLogMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         start_time: datetime = datetime.now()
-        await self.before_request(request)
+        try:
+            await self.before_request(request)
+        except Exception:
+            pass
         response = await call_next(request)
         end_time: datetime = datetime.now()
         process_time = int((end_time.timestamp() - start_time.timestamp()) * 1000)
-        await self.after_request(request, response, process_time)
+        try:
+            await self.after_request(request, response, process_time)
+        except Exception:
+            pass
         return response
