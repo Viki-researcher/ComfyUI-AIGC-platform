@@ -124,36 +124,6 @@
       <ElEmpty v-if="!loading && projects.length === 0" description="暂无项目" />
     </ElCard>
 
-    <ElDialog
-      v-model="imageDialogVisible"
-      :title="imageDialogTitle"
-      width="80%"
-      top="5vh"
-      append-to-body
-    >
-      <div class="image-gallery" style="max-height: 70vh; overflow-y: auto">
-        <div
-          style="
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-            gap: 12px;
-          "
-        >
-          <div v-for="img in imageList" :key="img.path" class="text-center">
-            <ElImage
-              :src="img.url"
-              :preview-src-list="imageList.map((i) => i.url)"
-              fit="cover"
-              style="width: 100%; height: 160px; border-radius: 8px; cursor: pointer"
-              lazy
-            />
-            <div class="text-xs text-gray-500 mt-1 truncate" :title="img.name">{{ img.name }}</div>
-          </div>
-        </div>
-        <ElEmpty v-if="imageList.length === 0" description="暂无图片" />
-      </div>
-    </ElDialog>
-
     <ElDialog v-model="dialogVisible" :title="dialogTitle" width="560px" append-to-body>
       <ArtForm
         ref="formRef"
@@ -180,8 +150,7 @@
     fetchGetProjects,
     fetchOpenComfy,
     fetchOpenAnnotation,
-    fetchUpdateProject,
-    fetchProjectImages
+    fetchUpdateProject
   } from '@/api/projects'
   import { useUserStore } from '@/store/modules/user'
   import { ElMessage, ElMessageBox } from 'element-plus'
@@ -340,31 +309,8 @@
     }
   }
 
-  const imageDialogVisible = ref(false)
-  const imageDialogTitle = ref('')
-  const imageList = ref<{ name: string; path: string; date: string; url: string }[]>([])
-
-  const handleOpenImages = async (p: Api.DataGen.Project) => {
-    try {
-      const res = await fetchProjectImages(p.id)
-      const data = res as any
-      const dir = data?.dir || p.name
-      const files: any[] = data?.files || []
-      if (files.length === 0) {
-        ElMessage.info('暂无生成图片')
-        return
-      }
-      imageList.value = files.map((f: any) => ({
-        name: f.name,
-        path: f.path,
-        date: f.date || '',
-        url: `/output/${encodeURIComponent(dir)}/${encodeURIComponent(f.path)}`
-      }))
-      imageDialogTitle.value = `${p.name} — 图像目录 (${files.length} 张)`
-      imageDialogVisible.value = true
-    } catch {
-      ElMessage.info('暂无生成图片')
-    }
+  const handleOpenImages = (p: Api.DataGen.Project) => {
+    window.open(`/api/projects/${p.id}/browse`, '_blank')
   }
 
   const handleDelete = async (p: Api.DataGen.Project) => {
