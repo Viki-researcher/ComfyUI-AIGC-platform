@@ -141,6 +141,20 @@ export LLM_PROVIDERS_JSON='[
 | `ollama` | `http://127.0.0.1:11434/v1` |
 | `custom` | 必须通过 `LLM_API_BASE_URL` 指定 |
 
+## 3.6 API Key 回退机制（v0.4.0）
+
+后端启动时，`Settings.model_post_init` 会自动检测 `LLM_API_KEY` 是否为无效的占位值。以下情况会触发回退：
+
+- Key 长度 < 8 个字符
+- Key 为纯数字
+- Key 为常见占位符（如 `"123"`、`"test"`）
+
+当检测到无效 Key 时，系统自动回退到 `.env` 文件中配置的值。此机制可防止 CI/CD 流水线或 Cloud Agent 注入的占位符环境变量覆盖有效的 API Key 配置。
+
+> **注意**：回退仅影响 `LLM_API_KEY`。如果 `.env` 文件中也没有有效的 Key，AI 对话功能将不可用，但不影响平台其他功能。
+
+---
+
 ## 4. 架构说明
 
 ### 4.1 后端架构
