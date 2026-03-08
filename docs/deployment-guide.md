@@ -298,6 +298,10 @@ chmod +x scripts/*.sh
 proxy_buffering off;
 ```
 
+### Q: LLM API Key 被 CI/CD 占位符覆盖
+
+自 v0.3+ 起，后端内置 API Key 回退机制。`Settings.model_post_init` 在启动时检测无效的 Key（长度 < 8、纯数字、`"123"`、`"test"` 等占位值），自动回退到 `.env` 文件中配置的值。无需手动处理 Cloud Agent 或 CI/CD 注入的占位符环境变量。
+
 ### Q: 数据库迁移
 
 后端启动时自动运行 Aerich 迁移。如果需要手动操作：
@@ -307,3 +311,8 @@ source .venv/bin/activate
 aerich migrate     # 生成迁移文件
 aerich upgrade     # 应用迁移
 ```
+
+---
+
+*文档版本：v0.4.0*  
+*更新日期：2026-03-08*

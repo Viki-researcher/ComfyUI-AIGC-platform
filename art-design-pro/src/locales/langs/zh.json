@@ -6,6 +6,7 @@
     "methodNotAllowed": "请求方法不允许",
     "requestTimeout": "请求超时，请稍后重试",
     "internalServerError": "服务器内部错误，请稍后重试",
+    "backendUnavailable": "后端服务不可用，请确认后端已启动后刷新页面",
     "badGateway": "网关错误，请稍后重试",
     "serviceUnavailable": "服务暂时不可用，请稍后重试",
     "gatewayTimeout": "网关超时，请稍后重试",
@@ -129,7 +130,7 @@
   },
   "login": {
     "leftView": {
-      "title": "一款可以对用户使用comfyUI进行数据生成与统计的一体化管理平台",
+      "title": "一款数据生成与统计的一体化管理平台",
       "subTitle": ""
     },
     "title": "欢迎回来",

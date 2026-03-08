@@ -2,6 +2,7 @@
 
 > 本文档列出平台**全部** REST API 端点，包含请求参数和响应结构。
 > 后端基础路径：`http://127.0.0.1:9999`，前端通过 Vite 代理 `/api` 转发。
+> 版本：v0.4.0
 
 ## 通用约定
 
@@ -72,6 +73,7 @@
 | DELETE | `/api/projects/{id}` | 删除项目 |
 | POST | `/api/projects/{id}/open_comfy` | 启动 ComfyUI |
 | POST | `/api/projects/{id}/open_annotation` | 启动标注工具 |
+| GET | `/api/projects/{id}/browse` | 浏览项目图片目录（HTML） |
 
 ### POST /api/projects
 
@@ -96,6 +98,12 @@
 ### POST /api/projects/{id}/open_annotation
 
 成功：`{ "annotation_url": "http://127.0.0.1:7860" }`
+
+### GET /api/projects/{id}/browse — 浏览项目图片目录（HTML）
+
+- **认证**: 无需认证（公开端点）
+- **说明**: 返回一个 HTML 页面，以表格形式列出项目输出目录下的所有图片文件（日期 / 文件名 / 大小），文件名可点击直接下载。
+- **响应**: HTML 页面（非 JSON）
 
 ---
 

@@ -296,3 +296,54 @@ async def list_project_images(project_id: int):
                 })
     return Success(data={"project_name": project.name, "dir": safe_name, "files": files, "total": len(files)})
 
+
+@router.get("/{project_id}/browse", summary="浏览项目图片目录（HTML）")
+async def browse_project_images(project_id: int):
+    """返回项目输出目录的 HTML 文件列表页面（无图片预览）。"""
+    from fastapi.responses import HTMLResponse
+
+    project = await Project.filter(id=project_id).first()
+    if not project:
+        return HTMLResponse("<h3>项目不存在</h3>", status_code=404)
+
+    safe_name = "".join(c if c.isalnum() or c in "-_ " else "_" for c in project.name).strip()
+    output_base = Path(settings.OUTPUT_BASE_DIR)
+    if not output_base.is_absolute():
+        output_base = Path(settings.BASE_DIR) / output_base
+    project_dir = output_base / safe_name
+
+    if not project_dir.exists():
+        return HTMLResponse(f"<h3>目录不存在：{safe_name}/</h3><p>该项目尚未生成任何图片。</p>")
+
+    rows = []
+    for sub in sorted(project_dir.iterdir(), reverse=True):
+        if sub.is_dir():
+            img_files = sorted(sub.iterdir())
+            for f in img_files:
+                if f.is_file() and f.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"):
+                    size_kb = f.stat().st_size / 1024
+                    rel = f.relative_to(project_dir)
+                    url = f"/output/{safe_name}/{rel}"
+                    rows.append(
+                        f'<tr><td>{sub.name}</td>'
+                        f'<td><a href="{url}" target="_blank">{f.name}</a></td>'
+                        f'<td>{size_kb:.1f} KB</td></tr>'
+                    )
+
+    html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>{project.name} — 图像目录</title>
+<style>
+body{{font-family:system-ui,sans-serif;margin:20px}}
+table{{border-collapse:collapse;width:100%}}
+th,td{{border:1px solid #ddd;padding:6px 12px;text-align:left}}
+th{{background:#f5f7fa}}
+a{{color:#409eff;text-decoration:none}}
+a:hover{{text-decoration:underline}}
+</style></head>
+<body><h2>{project.name} — 图像目录</h2>
+<p>共 {len(rows)} 个文件</p>
+<table><tr><th>日期</th><th>文件名</th><th>大小</th></tr>
+{''.join(rows)}
+</table></body></html>"""
+    return HTMLResponse(html)
+
