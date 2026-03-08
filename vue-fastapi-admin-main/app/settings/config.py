@@ -1,11 +1,30 @@
 import os
 import typing
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _read_dotenv_value(key: str, env_file: str = ".env") -> str | None:
+    """直接从 .env 文件读取指定 key 的值（不受环境变量覆盖影响）。"""
+    try:
+        with open(env_file, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" in line:
+                    k, _, v = line.partition("=")
+                    if k.strip() == key:
+                        return v.strip().strip('"').strip("'")
+    except FileNotFoundError:
+        pass
+    return None
 
 
 class Settings(BaseSettings):
-    VERSION: str = "0.1.0"
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    VERSION: str = "0.4.0"
     APP_TITLE: str = "Vue FastAPI Admin"
     PROJECT_NAME: str = "Vue FastAPI Admin"
     APP_DESCRIPTION: str = "Description"
@@ -58,6 +77,10 @@ class Settings(BaseSettings):
     COMFYUI_FORCE_CPU: bool = False
     COMFYUI_HISTORY_SYNC_INTERVAL_SECONDS: int = 10
 
+    # 统一输出目录：所有项目的生成图片集中存放（按 项目名/YYYYMMDD 组织）
+    # 为空时使用 runtime/output
+    OUTPUT_BASE_DIR: str = os.path.join("runtime", "output")
+
     # ComfyUI -> 平台回调（可选）
     PLATFORM_INTERNAL_SECRET: str = ""
     PLATFORM_CALLBACK_URL: str = "http://127.0.0.1:9999/api/internal/comfy/callback"
@@ -98,6 +121,32 @@ class Settings(BaseSettings):
     DATETIME_FORMAT: str = "%Y-%m-%d %H:%M:%S"
 
     def model_post_init(self, __context) -> None:  # type: ignore[override]
+        # 防止外部注入的无效 LLM_API_KEY 覆盖 .env 中的有效配置。
+        # 当环境变量中的 key 明显无效（过短 / 纯数字 / 常见占位符）时，
+        # 回退到 .env 文件中的值。
+        _LLM_PLACEHOLDER_VALUES = {"", "123", "test", "key", "your-api-key", "sk-xxx", "xxx"}
+        if self.LLM_API_KEY.strip() in _LLM_PLACEHOLDER_VALUES or (
+            len(self.LLM_API_KEY.strip()) < 8 and not self.LLM_API_KEY.startswith("sk-")
+        ):
+            dotenv_key = _read_dotenv_value("LLM_API_KEY")
+            if dotenv_key and len(dotenv_key) >= 8:
+                self.LLM_API_KEY = dotenv_key
+
+        if not self.LLM_API_BASE_URL:
+            dotenv_base = _read_dotenv_value("LLM_API_BASE_URL")
+            if dotenv_base:
+                self.LLM_API_BASE_URL = dotenv_base
+
+        if self.LLM_PROVIDER in ("openai",) and _read_dotenv_value("LLM_PROVIDER"):
+            dotenv_provider = _read_dotenv_value("LLM_PROVIDER")
+            if dotenv_provider and dotenv_provider != self.LLM_PROVIDER:
+                self.LLM_PROVIDER = dotenv_provider
+
+        if self.LLM_MODEL in ("gpt-4o-mini",) and _read_dotenv_value("LLM_MODEL"):
+            dotenv_model = _read_dotenv_value("LLM_MODEL")
+            if dotenv_model and dotenv_model != self.LLM_MODEL:
+                self.LLM_MODEL = dotenv_model
+
         self.TORTOISE_ORM = {
             "connections": {
                 "sqlite": {

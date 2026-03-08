@@ -49,6 +49,8 @@ def make_middlewares():
                 "/api/chat/images/",
                 "/api/chat/documents/upload",
                 "/api/chat/skills/",
+                "/api/projects/.*/open_comfy",
+                "/api/projects/.*/open_annotation",
                 "/docs",
                 "/openapi.json",
             ],
@@ -66,7 +68,17 @@ def register_exceptions(app: FastAPI):
 
 
 def register_routers(app: FastAPI, prefix: str = "/api"):
+    from pathlib import Path
+
+    from fastapi.staticfiles import StaticFiles
+
     app.include_router(api_router, prefix=prefix)
+
+    output_base = Path(settings.OUTPUT_BASE_DIR)
+    if not output_base.is_absolute():
+        output_base = Path(settings.BASE_DIR) / output_base
+    output_base.mkdir(parents=True, exist_ok=True)
+    app.mount("/output", StaticFiles(directory=str(output_base)), name="output_files")
 
 
 async def init_superuser():
@@ -191,9 +203,7 @@ async def init_menus():
 
 
 async def init_apis():
-    apis = await api_controller.model.exists()
-    if not apis:
-        await api_controller.refresh_api()
+    await api_controller.refresh_api()
 
 
 async def ensure_menu_auth_marks():
@@ -330,8 +340,11 @@ async def ensure_role_policies():
     if user_menus:
         await user_role.menus.add(*user_menus)
 
-    # 普通用户 API：基础模块 + 平台业务模块
-    allow_tags = ["基础模块", "项目模块", "日志模块", "统计模块", "监控模块"]
+    # 普通用户 API：基础模块 + 平台业务模块（含仪表盘、Prompt助手、AI对话、工作流等）
+    allow_tags = [
+        "基础模块", "项目模块", "日志模块", "统计模块", "监控模块",
+        "仪表盘模块", "Prompt助手模块", "AI对话", "工作流", "数据集模块",
+    ]
     basic_apis = await Api.filter(Q(tags__in=allow_tags))
     await user_role.apis.clear()
     await user_role.apis.add(*basic_apis)

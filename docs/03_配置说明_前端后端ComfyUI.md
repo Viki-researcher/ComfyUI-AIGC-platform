@@ -143,6 +143,12 @@ python main.py --listen 127.0.0.1 --port 8200 --disable-auto-launch
 | `LLM_TEMPERATURE`  | `0.7`         | 生成温度 (0.0 - 2.0)                                         |
 | `LLM_SYSTEM_PROMPT` | 内置默认       | 默认系统提示词                                                 |
 
+### LLM API Key 自动回退机制（v0.3+）
+
+后端 `Settings.model_post_init` 会检测 `LLM_API_KEY` 是否为明显无效值（过短 / 纯数字 / 常见占位符如 `"123"`, `"test"`）。如果检测到无效值，会自动从 `.env` 文件中读取真实的 key 作为回退。同样的逻辑也适用于 `LLM_API_BASE_URL`、`LLM_PROVIDER`、`LLM_MODEL`。
+
+这解决了外部环境变量（如 CI/CD 或 Cloud Agent 注入的占位符）覆盖 `.env` 中有效配置的问题。
+
 ### 6.2 多提供商配置
 
 通过 `LLM_PROVIDERS_JSON` 环境变量配置多个提供商，前端可在对话窗口切换：

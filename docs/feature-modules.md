@@ -260,11 +260,20 @@ POST /api/chat/index-comfyui-docs  (TODO: 待添加触发端点)
 | `target_count`  | Int  | 目标生成数量（0 = 不限制） |
 | `generated_count`| Int  | 已生成数量               |
 
+#### 预览图像（v0.4.0）
+
+项目卡片上的操作按钮由"打开图像目录"更新为"预览图像"。点击后在 ElDialog 图片画廊中展示该项目已生成的图片，支持：
+
+- 键盘左右箭头导航浏览
+- 缩略图网格与大图预览切换
+- 后端 API：`GET /api/projects/{id}/browse` 返回 HTML 目录页面
+
 #### API 影响
 
 - `POST /api/projects` — 请求体新增可选字段 `target_count`
 - `PUT /api/projects/{id}` — 可更新 `target_count`
 - `POST /api/projects/{id}/open_comfy` — 增加配额检查逻辑
+- `GET /api/projects/{id}/browse` — 浏览项目图片目录（HTML，无需认证）
 
 ---
 
@@ -488,5 +497,5 @@ Agent:
 
 ---
 
-*文档版本：v3.0*
-*更新日期：2026-02-27*
+*文档版本：v0.4.0*
+*更新日期：2026-03-08*

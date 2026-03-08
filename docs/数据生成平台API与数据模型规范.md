@@ -142,6 +142,13 @@ data: {"type": "error", "content": "错误信息"}
 | PUT    | `/api/projects/{id}`                | 是   | 更新项目（仅 owner）        |
 | DELETE | `/api/projects/{id}`                | 是   | 删除项目（仅 owner）        |
 | POST   | `/api/projects/{id}/open_comfy`     | 是   | 启动/打开 ComfyUI          |
+| GET    | `/api/projects/{id}/browse`         | 否   | 浏览项目图片目录（HTML）      |
+
+#### 浏览项目图片目录（HTML）
+
+- **GET** `/api/projects/{project_id}/browse`
+- 认证: 无需认证
+- 响应: HTML 页面（表格形式列出日期/文件名/大小）
 
 #### POST /api/projects
 
@@ -584,5 +591,5 @@ data: {"type": "error", "content": "错误信息"}
 
 ---
 
-*文档版本：v3.0*  
-*更新日期：2026-02-27*
+*文档版本：v0.4.0*  
+*更新日期：2026-03-08*

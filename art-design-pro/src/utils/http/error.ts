@@ -126,16 +126,33 @@ export function handleError(error: AxiosError<ErrorResponse>): never {
   }
 
   const statusCode = error.response?.status
-  const errorMessage = error.response?.data?.msg || error.message
   const requestConfig = error.config
 
-  // 处理网络错误
+  // 处理网络错误（无响应）
   if (!error.response) {
     throw new HttpError($t('httpMsg.networkError'), ApiStatus.error, {
       url: requestConfig?.url,
       method: requestConfig?.method?.toUpperCase()
     })
   }
+
+  // 判断是否为代理层错误（后端不可达）：
+  // Vite 代理在后端不可达时返回 HTTP 500，但响应体为纯文本而非 JSON
+  const responseData = error.response.data
+  const isProxyError =
+    statusCode === ApiStatus.internalServerError &&
+    (typeof responseData === 'string' || !responseData?.code)
+
+  if (isProxyError) {
+    throw new HttpError($t('httpMsg.backendUnavailable'), ApiStatus.internalServerError, {
+      data: responseData,
+      url: requestConfig?.url,
+      method: requestConfig?.method?.toUpperCase()
+    })
+  }
+
+  // 处理后端返回的业务错误
+  const errorMessage = responseData?.msg || error.message
 
   // 处理 HTTP 状态码错误
   const message = statusCode

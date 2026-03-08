@@ -145,7 +145,7 @@
     {
       key: 'super',
       label: t('login.roles.super'),
-      userName: 'Super',
+      userName: 'admin',
       password: '123456',
       roles: ['R_SUPER']
     },

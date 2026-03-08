@@ -63,7 +63,10 @@
 
             <div v-if="p.note" class="line-clamp-1 text-xs text-gray-500 mb-2">{{ p.note }}</div>
 
-            <div v-if="isTargetReached(p)" class="text-xs text-green-600 mb-2 flex items-center gap-1">
+            <div
+              v-if="isTargetReached(p)"
+              class="text-xs text-green-600 mb-2 flex items-center gap-1"
+            >
               <span>✓</span> 已达目标数量，编辑项目可调整上限
             </div>
 
@@ -110,6 +113,9 @@
               >
                 删除
               </ElButton>
+              <ElButton type="info" size="small" plain @click="handleOpenImages(p)" v-ripple>
+                预览图像
+              </ElButton>
             </div>
           </ElCard>
         </ElCol>
@@ -117,6 +123,56 @@
 
       <ElEmpty v-if="!loading && projects.length === 0" description="暂无项目" />
     </ElCard>
+
+    <!-- 图片预览弹窗 -->
+    <ElDialog
+      v-model="imageDialogVisible"
+      :title="imageDialogTitle"
+      width="90%"
+      top="3vh"
+      append-to-body
+      @opened="onImageDialogOpened"
+      @closed="onImageDialogClosed"
+    >
+      <div v-if="imageList.length > 0" class="image-viewer">
+        <div class="image-viewer-main">
+          <button class="nav-btn nav-prev" @click="prevImage" :disabled="currentImageIndex <= 0">
+            ‹
+          </button>
+          <div class="image-viewer-stage">
+            <img
+              :src="imageList[currentImageIndex]?.url"
+              :alt="imageList[currentImageIndex]?.name"
+              class="viewer-img"
+            />
+          </div>
+          <button
+            class="nav-btn nav-next"
+            @click="nextImage"
+            :disabled="currentImageIndex >= imageList.length - 1"
+          >
+            ›
+          </button>
+        </div>
+        <div class="image-viewer-info">
+          {{ currentImageIndex + 1 }} / {{ imageList.length }}
+          &nbsp;—&nbsp;
+          {{ imageList[currentImageIndex]?.name }}
+        </div>
+        <div class="image-thumbs">
+          <div
+            v-for="(img, idx) in imageList"
+            :key="img.path"
+            class="thumb-item"
+            :class="{ active: idx === currentImageIndex }"
+            @click="currentImageIndex = idx"
+          >
+            <img :src="img.url" :alt="img.name" />
+          </div>
+        </div>
+      </div>
+      <ElEmpty v-else description="暂无图片" />
+    </ElDialog>
 
     <ElDialog v-model="dialogVisible" :title="dialogTitle" width="560px" append-to-body>
       <ArtForm
@@ -144,7 +200,8 @@
     fetchGetProjects,
     fetchOpenComfy,
     fetchOpenAnnotation,
-    fetchUpdateProject
+    fetchUpdateProject,
+    fetchProjectImages
   } from '@/api/projects'
   import { useUserStore } from '@/store/modules/user'
   import { ElMessage, ElMessageBox } from 'element-plus'
@@ -236,7 +293,12 @@
   const openEditDialog = (p: Api.DataGen.Project) => {
     dialogMode.value = 'edit'
     editingId.value = p.id
-    formModel.value = { name: p.name, code: p.code, note: p.note || '', target_count: p.target_count }
+    formModel.value = {
+      name: p.name,
+      code: p.code,
+      note: p.note || '',
+      target_count: p.target_count
+    }
     dialogVisible.value = true
   }
 
@@ -298,10 +360,59 @@
     }
   }
 
+  const imageDialogVisible = ref(false)
+  const imageDialogTitle = ref('')
+  const imageList = ref<{ name: string; path: string; date: string; url: string }[]>([])
+  const currentImageIndex = ref(0)
+
+  const handleOpenImages = async (p: Api.DataGen.Project) => {
+    try {
+      const res = await fetchProjectImages(p.id)
+      const data = res as any
+      const dir = data?.dir || p.name
+      const files: any[] = data?.files || []
+      if (files.length === 0) {
+        ElMessage.info('暂无生成图片')
+        return
+      }
+      imageList.value = files.map((f: any) => ({
+        name: f.name,
+        path: f.path,
+        date: f.date || '',
+        url: `/output/${encodeURIComponent(dir)}/${f.path}`
+      }))
+      imageDialogTitle.value = `${p.name} — 图像预览 (${files.length} 张)`
+      currentImageIndex.value = 0
+      imageDialogVisible.value = true
+    } catch {
+      ElMessage.info('暂无生成图片')
+    }
+  }
+
+  const prevImage = () => {
+    if (currentImageIndex.value > 0) currentImageIndex.value--
+  }
+  const nextImage = () => {
+    if (currentImageIndex.value < imageList.value.length - 1) currentImageIndex.value++
+  }
+
+  const onKeydown = (e: KeyboardEvent) => {
+    if (e.key === 'ArrowLeft') prevImage()
+    else if (e.key === 'ArrowRight') nextImage()
+  }
+  const onImageDialogOpened = () => window.addEventListener('keydown', onKeydown)
+  const onImageDialogClosed = () => window.removeEventListener('keydown', onKeydown)
+
   const handleDelete = async (p: Api.DataGen.Project) => {
-    await ElMessageBox.confirm(`确认删除项目「${p.name}」吗？`, '提示', { type: 'warning' })
-    await fetchDeleteProject(p.id)
-    await loadProjects()
+    try {
+      await ElMessageBox.confirm(`确认删除项目「${p.name}」吗？`, '提示', { type: 'warning' })
+      await fetchDeleteProject(p.id)
+      projects.value = projects.value.filter((item) => item.id !== p.id)
+    } catch (e: any) {
+      if (e !== 'cancel' && e?.message !== 'cancel') {
+        ElMessage.error(e?.message || '删除失败')
+      }
+    }
   }
 </script>
 
@@ -334,5 +445,99 @@
 
   .status-stopped {
     background-color: #c0c4cc;
+  }
+
+  .image-viewer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .image-viewer-main {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .image-viewer-stage {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 400px;
+    max-height: 60vh;
+    overflow: hidden;
+    background: #f5f7fa;
+    border-radius: 8px;
+  }
+
+  .viewer-img {
+    max-width: 100%;
+    max-height: 60vh;
+    object-fit: contain;
+    border-radius: 4px;
+  }
+
+  .nav-btn {
+    width: 40px;
+    height: 60px;
+    border: 1px solid #dcdfe6;
+    border-radius: 6px;
+    background: #fff;
+    font-size: 24px;
+    cursor: pointer;
+    color: #606266;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+
+  .nav-btn:hover:not(:disabled) {
+    background: #409eff;
+    color: #fff;
+    border-color: #409eff;
+  }
+
+  .nav-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .image-viewer-info {
+    font-size: 13px;
+    color: #909399;
+  }
+
+  .image-thumbs {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    max-width: 100%;
+    padding: 4px 0;
+  }
+
+  .thumb-item {
+    width: 56px;
+    height: 56px;
+    border-radius: 4px;
+    overflow: hidden;
+    cursor: pointer;
+    border: 2px solid transparent;
+    flex-shrink: 0;
+    transition: border-color 0.2s;
+  }
+
+  .thumb-item.active {
+    border-color: #409eff;
+  }
+
+  .thumb-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
 </style>

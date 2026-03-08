@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Query, Request
@@ -8,9 +9,10 @@ from tortoise.expressions import Q
 
 from app.core.ctx import CTX_USER_ID
 from app.core.dependency import DependPermission
+from app.log import logger
 from app.models import User
 from app.models.platform import AnnotationService, ComfyUIService, Project
-from app.services.comfyui_manager import ensure_comfyui_service, stop_pid
+from app.services.comfyui_manager import restart_comfyui_service, stop_pid
 from app.services.annotation_manager import ensure_annotation_service
 from app.schemas.base import Fail, Success
 from app.schemas.platform import OpenAnnotationOut, OpenComfyOut, ProjectCreate, ProjectUpdate
@@ -113,10 +115,12 @@ async def list_projects(
     owner_map = {int(r["id"]): r["username"] for r in owner_rows}
 
     from app.models.platform import GenerationLog
+    from tortoise.functions import Sum
     project_ids = [p.id for p in rows]
     gen_counts = {}
     for pid in project_ids:
-        gen_counts[pid] = await GenerationLog.filter(project_id=pid, status="成功").count()
+        agg = await GenerationLog.filter(project_id=pid, status="成功").annotate(total=Sum("image_count")).values("total")
+        gen_counts[pid] = agg[0]["total"] or 0 if agg else 0
 
     comfy_map = {}
     ann_map = {}
@@ -124,6 +128,9 @@ async def list_projects(
         comfy_map[svc.project_id] = svc.status
     for svc in await AnnotationService.filter(project_id__in=project_ids).all():
         ann_map[svc.project_id] = svc.status
+
+    def _output_dir_name(name: str) -> str:
+        return "".join(c if c.isalnum() or c in "-_ " else "_" for c in name).strip()
 
     data = [
         {
@@ -137,6 +144,7 @@ async def list_projects(
             "generated_count": gen_counts.get(p.id, 0),
             "comfy_status": comfy_map.get(p.id, "stopped"),
             "annotation_status": ann_map.get(p.id, "stopped"),
+            "output_dir": _output_dir_name(p.name),
             "create_time": _now_str(p.created_at),
             "update_time": _now_str(p.updated_at),
         }
@@ -182,16 +190,27 @@ async def delete_project(project_id: int):
     if project.owner_user_id != user_id:
         return Fail(code=403, msg="无操作权限")
 
+    # 1) 停止 ComfyUI 服务进程并删除服务记录
     svc = await ComfyUIService.filter(project_id=project_id).first()
     if svc and svc.pid:
-        stop_pid(int(svc.pid))
+        try:
+            stop_pid(int(svc.pid))
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[Project] stop ComfyUI pid={svc.pid} failed: {e}")
     await ComfyUIService.filter(project_id=project_id).delete()
 
+    # 2) 停止标注服务进程并删除服务记录
     ann_svc = await AnnotationService.filter(project_id=project_id).first()
     if ann_svc and ann_svc.pid:
-        stop_pid(int(ann_svc.pid))
+        try:
+            stop_pid(int(ann_svc.pid))
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[Project] stop Annotation pid={ann_svc.pid} failed: {e}")
     await AnnotationService.filter(project_id=project_id).delete()
 
+    # 注意：保留 GenerationLog 和 output 图片目录，不做清理
+
+    # 3) 删除项目记录
     await Project.filter(id=project_id).delete()
     return Success(msg="Deleted")
 
@@ -207,7 +226,9 @@ async def open_comfy(project_id: int, request: Request):
         return Fail(code=403, msg="无操作权限")
 
     from app.models.platform import GenerationLog
-    gen_count = await GenerationLog.filter(project_id=project_id, status="成功").count()
+    from tortoise.functions import Sum
+    agg = await GenerationLog.filter(project_id=project_id, status="成功").annotate(total=Sum("image_count")).values("total")
+    gen_count = agg[0]["total"] or 0 if agg else 0
     if project.target_count and gen_count >= project.target_count:
         return Fail(
             code=400,
@@ -219,7 +240,7 @@ async def open_comfy(project_id: int, request: Request):
         return Fail(code=403, msg="无操作权限")
 
     try:
-        svc = await ensure_comfyui_service(user_id=user_id, project_id=project_id)
+        svc = await restart_comfyui_service(user_id=user_id, project_id=project_id)
     except Exception as e:  # noqa: BLE001
         return Fail(code=500, msg=f"启动 ComfyUI 失败：{e}")
 
@@ -248,4 +269,81 @@ async def open_annotation(project_id: int, request: Request):
 
     public_url = _get_public_comfy_url(port=int(svc.port), request=request)
     return Success(data=OpenAnnotationOut(annotation_url=public_url).model_dump())
+
+
+@router.get("/{project_id}/images", summary="列出项目生成图片", dependencies=[DependPermission])
+async def list_project_images(project_id: int):
+    project = await Project.filter(id=project_id).first()
+    if not project:
+        return Fail(code=404, msg="项目不存在")
+
+    safe_name = "".join(c if c.isalnum() or c in "-_ " else "_" for c in project.name).strip()
+    output_base = Path(settings.OUTPUT_BASE_DIR)
+    if not output_base.is_absolute():
+        output_base = Path(settings.BASE_DIR) / output_base
+    project_dir = output_base / safe_name
+
+    files = []
+    if project_dir.exists():
+        for f in sorted(project_dir.rglob("*"), reverse=True):
+            if f.is_file() and f.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"):
+                rel = f.relative_to(project_dir)
+                files.append({
+                    "name": f.name,
+                    "path": str(rel),
+                    "size": f.stat().st_size,
+                    "date": f.parent.name,
+                })
+    return Success(data={"project_name": project.name, "dir": safe_name, "files": files, "total": len(files)})
+
+
+@router.get("/{project_id}/browse", summary="浏览项目图片目录（HTML）")
+async def browse_project_images(project_id: int):
+    """返回项目输出目录的 HTML 文件列表页面（无图片预览）。"""
+    from fastapi.responses import HTMLResponse
+
+    project = await Project.filter(id=project_id).first()
+    if not project:
+        return HTMLResponse("<h3>项目不存在</h3>", status_code=404)
+
+    safe_name = "".join(c if c.isalnum() or c in "-_ " else "_" for c in project.name).strip()
+    output_base = Path(settings.OUTPUT_BASE_DIR)
+    if not output_base.is_absolute():
+        output_base = Path(settings.BASE_DIR) / output_base
+    project_dir = output_base / safe_name
+
+    if not project_dir.exists():
+        return HTMLResponse(f"<h3>目录不存在：{safe_name}/</h3><p>该项目尚未生成任何图片。</p>")
+
+    rows = []
+    for sub in sorted(project_dir.iterdir(), reverse=True):
+        if sub.is_dir():
+            img_files = sorted(sub.iterdir())
+            for f in img_files:
+                if f.is_file() and f.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"):
+                    size_kb = f.stat().st_size / 1024
+                    rel = f.relative_to(project_dir)
+                    url = f"/output/{safe_name}/{rel}"
+                    rows.append(
+                        f'<tr><td>{sub.name}</td>'
+                        f'<td><a href="{url}" target="_blank">{f.name}</a></td>'
+                        f'<td>{size_kb:.1f} KB</td></tr>'
+                    )
+
+    html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>{project.name} — 图像目录</title>
+<style>
+body{{font-family:system-ui,sans-serif;margin:20px}}
+table{{border-collapse:collapse;width:100%}}
+th,td{{border:1px solid #ddd;padding:6px 12px;text-align:left}}
+th{{background:#f5f7fa}}
+a{{color:#409eff;text-decoration:none}}
+a:hover{{text-decoration:underline}}
+</style></head>
+<body><h2>{project.name} — 图像目录</h2>
+<p>共 {len(rows)} 个文件</p>
+<table><tr><th>日期</th><th>文件名</th><th>大小</th></tr>
+{''.join(rows)}
+</table></body></html>"""
+    return HTMLResponse(html)
 
