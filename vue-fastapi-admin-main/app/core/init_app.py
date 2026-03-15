@@ -174,28 +174,6 @@ async def init_menus():
                 component="/system/api",
                 keepalive=False,
             ),
-            Menu(
-                menu_type=MenuType.MENU,
-                name="部门管理",
-                path="dept",
-                order=5,
-                parent_id=parent_menu.id,
-                icon="mingcute:department-line",
-                is_hidden=False,
-                component="/system/dept",
-                keepalive=False,
-            ),
-            Menu(
-                menu_type=MenuType.MENU,
-                name="审计日志",
-                path="auditlog",
-                order=6,
-                parent_id=parent_menu.id,
-                icon="ph:clipboard-text-bold",
-                is_hidden=False,
-                component="/system/auditlog",
-                keepalive=False,
-            ),
         ]
         await Menu.bulk_create(children_menu)
         # 注意：菜单数据需要与前端 views 组件路径一致，否则动态路由会加载失败。
@@ -225,6 +203,18 @@ async def ensure_menu_auth_marks():
             ]
         }
         await menu.save()
+
+
+async def ensure_hide_removed_system_menus():
+    """
+    隐藏已移除的系统管理子菜单：部门管理、审计日志。
+    对已有数据库，将这两个菜单设为隐藏，使其不再在侧边栏显示。
+    """
+    for name in ["部门管理", "审计日志"]:
+        menu = await Menu.filter(name=name).first()
+        if menu and not menu.is_hidden:
+            menu.is_hidden = True
+            await menu.save()
 
 
 async def ensure_platform_menus():
@@ -389,6 +379,7 @@ async def init_data():
     await init_superuser()
     await init_menus()
     await ensure_platform_menus()
+    await ensure_hide_removed_system_menus()
     await init_apis()
     await ensure_menu_auth_marks()
     await init_roles()

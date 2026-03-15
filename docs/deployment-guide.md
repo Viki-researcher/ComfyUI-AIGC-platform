@@ -3,8 +3,9 @@
 ## 目录
 
 - [快速开始](#快速开始)
+- [单一事实源配置](#单一事实源配置)
 - [Docker Compose 部署（推荐）](#docker-compose-部署推荐)
-- [手动部署](#手动部署)
+- [手动部署（完整步骤）](#手动部署完整步骤)
 - [环境变量参考](#环境变量参考)
 - [常见问题](#常见问题)
 
@@ -39,6 +40,29 @@ pnpm dev --port 3006 --open false &
 # 3. 访问 http://localhost:3006
 # 默认账号: admin / 123456
 ```
+
+---
+
+## 单一事实源配置
+
+平台端口与交互地址统一由 **`platform.config.env`**（项目根目录）管理，修改后重启相关服务即可生效。
+
+```bash
+# 项目根目录
+cat platform.config.env
+```
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `FRONTEND_PORT` | 3006 | 前端 Vite 端口 |
+| `BACKEND_PORT` | 9999 | 后端 FastAPI 端口 |
+| `POSTGRES_PORT` | 5432 | PostgreSQL 端口 |
+| `COMFYUI_PORT_RANGE` | 8200-8299 | ComfyUI 实例端口池 |
+| `ANNOTATION_PORT_RANGE` | 7860-7899 | 标注工具端口池 |
+| `VITE_API_PROXY_URL` | 由 BACKEND_PORT 派生 | 前端代理目标 |
+| `PLATFORM_CALLBACK_URL` | 由 BACKEND_PORT 派生 | ComfyUI 回调地址 |
+
+**修改端口**：编辑 `platform.config.env` 后，重启前端、后端及相关脚本。
 
 ---
 
@@ -85,7 +109,7 @@ docker compose up -d
 ```bash
 docker compose logs -f backend   # 后端日志
 docker compose logs -f frontend  # 前端日志
-docker compose logs -f postgres  # 数据库日志
+docker compose logs -f postgres # 数据库日志
 ```
 
 ### 5. 停止 / 重启
@@ -96,138 +120,210 @@ docker compose restart backend   # 重启后端
 docker compose up -d --build     # 重建并启动
 ```
 
-### 6. 数据持久化
-
-| 数据 | Docker Volume | 说明 |
-|------|--------------|------|
-| 数据库 | `pgdata` | PostgreSQL 数据文件 |
-| 运行时 | `backend_runtime` | 上传文件、报表、日志 |
-
-### 服务架构图
-
-```
-                    ┌──────────┐
-    :3006 ──────────│ Nginx    │
-                    │(frontend)│
-                    └────┬─────┘
-                         │ /api/* proxy
-                    ┌────┴─────┐
-    :9999 ──────────│ FastAPI  │
-                    │(backend) │
-                    └────┬─────┘
-                         │
-                    ┌────┴─────┐
-    :5432 ──────────│PostgreSQL│
-                    └──────────┘
-```
-
 ---
 
-## 手动部署
+## 手动部署（完整步骤）
 
-### 后端部署
+以下步骤按顺序执行，可完成前后端、PostgreSQL、ComfyUI、数据生成环境的完整配置。
+
+### 步骤 0：克隆项目与目录结构
+
+```bash
+# 假设项目根目录为 /workspace（或你的实际路径）
+cd /workspace
+ls -la
+# 应包含：art-design-pro/  vue-fastapi-admin-main/  ComfyUI-master-fitow/  docs/
+```
+
+### 步骤 1：安装系统依赖（Ubuntu/Debian）
+
+```bash
+sudo apt update
+sudo apt install -y git curl wget build-essential pkg-config libpq-dev python3-dev
+```
+
+### 步骤 2：安装 Node.js 与 pnpm
+
+```bash
+# 使用 nvm（推荐）
+curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+source ~/.bashrc
+nvm install 20
+nvm use 20
+node -v   # 应 >= 20.19
+npm -v
+
+# 安装 pnpm
+npm i -g pnpm
+pnpm -v   # 应 >= 8.8
+```
+
+### 步骤 3：安装 PostgreSQL 并初始化
+
+```bash
+# 3.1 安装
+sudo apt install -y postgresql postgresql-contrib
+
+# 3.2 启动并设置开机自启
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+
+# 3.3 设置 postgres 用户密码并创建数据库
+sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'postgres';"
+sudo -u postgres psql -c "CREATE DATABASE data_generation OWNER postgres;"
+
+# 3.4 验证连接
+psql "host=127.0.0.1 port=5432 user=postgres dbname=data_generation" -c "SELECT 1;"
+```
+
+> 若使用脚本安装：`cd docs/scripts && chmod +x install_postgres.sh && ./install_postgres.sh`
+
+### 步骤 4：配置单一事实源（可选修改端口）
+
+```bash
+# 项目根目录
+cat platform.config.env
+# 如需修改端口，编辑此文件后保存
+```
+
+### 步骤 5：后端部署
 
 ```bash
 cd vue-fastapi-admin-main
 
-# 创建虚拟环境
+# 5.1 创建虚拟环境
 python3 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
 
-# 安装依赖
+# 5.2 安装依赖
 pip install -r requirements.txt
 
-# 配置环境变量
+# 5.3 配置环境变量（可写入 .env 或导出）
+# 从 platform.config.env 读取端口，或直接指定：
 export DB_DEFAULT_CONNECTION=postgres
 export POSTGRES_HOST=127.0.0.1
 export POSTGRES_PORT=5432
 export POSTGRES_USER=postgres
-export POSTGRES_PASSWORD=your_password
+export POSTGRES_PASSWORD=postgres
 export POSTGRES_DB=data_generation
-export LLM_PROVIDER=openai      # 或其他提供商
-export LLM_API_KEY=sk-your-key
-export LLM_MODEL=gpt-4o-mini   # 对应模型名称
+export COMFYUI_REPO_PATH="$(cd .. && pwd)/ComfyUI-master-fitow"
+export COMFYUI_PYTHON="$(which python3)"
+export COMFYUI_FORCE_CPU=true
+export ANNOTATION_TOOL_PATH="$(cd .. && pwd)/sam3-annotation-tool"   # 可选
+export PLATFORM_INTERNAL_SECRET=platform_secret_key_2026
 
-# 启动（开发模式，带热重载）
-python run.py
+# LLM 配置（AI 对话必填）
+export LLM_PROVIDER=openai
+export LLM_API_KEY=sk-your-key-here
+export LLM_MODEL=gpt-4o-mini
 
-# 启动（生产模式）
-python -m uvicorn app:app --host 0.0.0.0 --port 9999 --workers 4
+# 5.4 启动后端（开发模式）
+python -m uvicorn app:app --host 0.0.0.0 --port 9999
+
+# 或生产模式：
+# python -m uvicorn app:app --host 0.0.0.0 --port 9999 --workers 4
 ```
 
-### 前端部署
+后端启动成功后，访问 http://127.0.0.1:9999/docs 应能看到 Swagger 文档。
 
-#### 开发模式
+### 步骤 6：前端部署（新终端）
 
 ```bash
 cd art-design-pro
+
+# 6.1 安装依赖
 pnpm install
+
+# 6.2 配置代理（.env.development 或环境变量）
+# 确保 VITE_API_PROXY_URL 指向后端，默认 http://127.0.0.1:9999
+export VITE_API_PROXY_URL=http://127.0.0.1:9999
+export VITE_DISABLE_DRAG_VERIFY=true
+
+# 6.3 启动前端（开发模式）
 pnpm dev --host 0.0.0.0 --port 3006
+# 或：VITE_PORT=3006 npx vite --host 0.0.0.0 --port 3006
 ```
 
-#### 生产构建
+前端启动后，访问 http://127.0.0.1:3006 应能看到登录页。
+
+### 步骤 7：ComfyUI 部署（数据生成功能，可选）
+
+ComfyUI 由后端按项目按需启动，需预先安装依赖：
 
 ```bash
-cd art-design-pro
-pnpm install
-pnpm build
+cd ComfyUI-master-fitow
 
-# 产出目录: dist/
-# 使用 Nginx 托管 dist/ 目录
+# 7.1 创建独立 Python 环境（推荐，避免与后端冲突）
+python3 -m venv .venv
+source .venv/bin/activate
+
+# 7.2 安装 ComfyUI 依赖
+pip install -r requirements.txt
+
+# 7.3 若为 CPU 环境，安装 CPU 版 PyTorch
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+# 7.4 验证（可选手动启动测试）
+python main.py --listen 127.0.0.1 --port 8200 --cpu --disable-auto-launch
+# 访问 http://127.0.0.1:8200 应能看到 ComfyUI 界面，测试后 Ctrl+C 停止
 ```
 
-#### Nginx 配置示例
+配置后端环境变量指向 ComfyUI：
 
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-    root /path/to/art-design-pro/dist;
-    index index.html;
-
-    # SPA 路由
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    # API 代理
-    location /api/ {
-        proxy_pass http://127.0.0.1:9999;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_buffering off;          # SSE 流式响应必须关闭缓冲
-        proxy_read_timeout 300s;      # LLM 响应可能较慢
-    }
-}
+```bash
+# 在 vue-fastapi-admin-main 目录
+export COMFYUI_REPO_PATH="$(cd .. && pwd)/ComfyUI-master-fitow"
+export COMFYUI_PYTHON="$(cd ../ComfyUI-master-fitow && pwd)/.venv/bin/python"
+export COMFYUI_FORCE_CPU=true
 ```
 
-### 一键脚本部署（适用于开发联调）
+### 步骤 8：一键脚本部署（可选，替代步骤 5、6 手动启动）
 
 ```bash
 cd docs
 cp .env.platform.example .env.platform
-# 编辑 .env.platform 修改路径和端口
+
+# 编辑 .env.platform，至少修改：
+# - ART_FRONTEND_DIR、BACKEND_DIR、COMFYUI_REPO_PATH（使用 PROJECT_ROOT 时一般无需改）
+# - BACKEND_PY、COMFYUI_PYTHON：指向实际 Python 路径
+# - POSTGRES_*：若与默认不同
+
 chmod +x scripts/*.sh
 ./scripts/start_all.sh    # 启动
 ./scripts/status.sh       # 状态
 ./scripts/stop_all.sh     # 停止
 ```
 
+### 步骤 9：验证部署
+
+| 检查项 | 命令 / 操作 | 预期结果 |
+|--------|-------------|----------|
+| PostgreSQL | `psql -h 127.0.0.1 -p 5432 -U postgres -d data_generation -c "SELECT 1;"` | 返回 1 |
+| 后端 API | `curl -s http://127.0.0.1:9999/openapi.json \| head -c 200` | 返回 JSON |
+| 前端 | 浏览器访问 http://127.0.0.1:3006 | 显示登录页 |
+| 登录 | 用户名 `admin`，密码 `123456` | 进入主界面 |
+| 数据生成 | 创建项目 → 点击「数据生成」 | 弹出 ComfyUI（若已配置） |
+
 ---
 
 ## 环境变量参考
 
-### 核心配置
+### 核心配置（单一事实源：platform.config.env）
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `FRONTEND_PORT` | 3006 | 前端端口 |
+| `BACKEND_PORT` | 9999 | 后端端口 |
+| `POSTGRES_PORT` | 5432 | PostgreSQL 端口 |
+| `COMFYUI_PORT_RANGE` | 8200-8299 | ComfyUI 端口池 |
+| `ANNOTATION_PORT_RANGE` | 7860-7899 | 标注工具端口池 |
+
+### 数据库配置
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `DB_DEFAULT_CONNECTION` | `postgres` | 数据库类型: `postgres` 或 `sqlite` |
 | `POSTGRES_HOST` | `127.0.0.1` | PostgreSQL 地址 |
-| `POSTGRES_PORT` | `5432` | PostgreSQL 端口 |
 | `POSTGRES_USER` | `postgres` | PostgreSQL 用户 |
 | `POSTGRES_PASSWORD` | `postgres` | PostgreSQL 密码 |
 | `POSTGRES_DB` | `data_generation` | 数据库名 |
@@ -242,26 +338,6 @@ chmod +x scripts/*.sh
 | `LLM_MODEL` | `gpt-4o-mini` | 默认模型 |
 | `LLM_MAX_TOKENS` | `4096` | 最大 Token |
 | `LLM_TEMPERATURE` | `0.7` | 生成温度 |
-| `LLM_SYSTEM_PROMPT` | 内置 | 系统提示词 |
-| `LLM_PROVIDERS_JSON` | `[]` | 多提供商配置(JSON) |
-
-### RAG 配置
-
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `RAG_ENABLED` | `true` | 启用 RAG |
-| `RAG_CHUNK_SIZE` | `500` | 分块大小 |
-| `RAG_CHUNK_OVERLAP` | `50` | 重叠字符数 |
-| `RAG_TOP_K` | `3` | 检索数量 |
-| `RAG_UPLOAD_DIR` | `runtime/chat_uploads` | 上传目录 |
-
-### Embedding 配置
-
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `EMBEDDING_API_KEY` | 复用 LLM | 嵌入 API 密钥 |
-| `EMBEDDING_API_BASE_URL` | 复用 LLM | 嵌入 API 基地址 |
-| `EMBEDDING_MODEL` | `text-embedding-3-small` | 嵌入模型 |
 
 ### ComfyUI 配置
 
@@ -287,6 +363,10 @@ chmod +x scripts/*.sh
 - OpenAI: `sk-proj-xxx...`
 - 其他提供商: `sk-xxx...`
 
+### Q: 如何统一修改所有端口？
+
+编辑项目根目录的 `platform.config.env`，修改 `FRONTEND_PORT`、`BACKEND_PORT` 等，然后重启相关服务。脚本（start_all.sh、status.sh、stop_all.sh）会自动读取该配置。
+
 ### Q: Docker 构建前端失败
 
 确保 `pnpm-lock.yaml` 文件存在且与 `package.json` 匹配。如果缺失，先在本地运行 `pnpm install` 生成。
@@ -297,10 +377,6 @@ chmod +x scripts/*.sh
 ```nginx
 proxy_buffering off;
 ```
-
-### Q: LLM API Key 被 CI/CD 占位符覆盖
-
-自 v0.3+ 起，后端内置 API Key 回退机制。`Settings.model_post_init` 在启动时检测无效的 Key（长度 < 8、纯数字、`"123"`、`"test"` 等占位值），自动回退到 `.env` 文件中配置的值。无需手动处理 Cloud Agent 或 CI/CD 注入的占位符环境变量。
 
 ### Q: 数据库迁移
 
@@ -315,4 +391,4 @@ aerich upgrade     # 应用迁移
 ---
 
 *文档版本：v0.4.0*  
-*更新日期：2026-03-08*
+*更新日期：2026-03-12*

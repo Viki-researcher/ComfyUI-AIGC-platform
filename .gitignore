@@ -5,6 +5,11 @@
 runtime/
 *.log
 .env
+# 编辑器临时文件
+*.swp
+*.swo
+*~
+#*#
 node_modules/
 __pycache__/
 .DS_Store

@@ -10,7 +10,12 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROJECT_ROOT="$(cd "${ROOT_DIR}/.." && pwd)"
 PID_DIR="${ROOT_DIR}/runtime/pids"
+
+# 加载单一事实源配置（端口）
+[[ -f "${PROJECT_ROOT}/platform.config.env" ]] && set -a && source "${PROJECT_ROOT}/platform.config.env" && set +a
+[[ -f "${ROOT_DIR}/.env.platform" ]] && set -a && source "${ROOT_DIR}/.env.platform" && set +a
 
 _kill_pid() {
   local pid="$1"
@@ -83,7 +88,7 @@ stop_port_range "comfyui instances" 8200 8299
 stop_port_range "annotation instances" 7860 7899
 
 # 2) 再停主服务
-stop_by_pid_or_port "backend" "9999"
-stop_by_pid_or_port "frontend" "3006"
+stop_by_pid_or_port "backend" "${BACKEND_PORT:-9999}"
+stop_by_pid_or_port "frontend" "${FRONTEND_PORT:-3006}"
 
 echo "[stop_all] all services stopped"
