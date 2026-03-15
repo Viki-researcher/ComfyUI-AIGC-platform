@@ -2,7 +2,15 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROJECT_ROOT="$(cd "${ROOT_DIR}/.." && pwd)"
 ENV_FILE="${ROOT_DIR}/.env.platform"
+
+# 优先加载单一事实源配置（端口等）
+if [[ -f "${PROJECT_ROOT}/platform.config.env" ]]; then
+  set -a
+  source "${PROJECT_ROOT}/platform.config.env"
+  set +a
+fi
 
 if [[ ! -f "${ENV_FILE}" ]]; then
   echo "[start_all] ERROR: missing ${ENV_FILE}"

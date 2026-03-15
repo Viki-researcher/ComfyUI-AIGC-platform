@@ -238,7 +238,7 @@ pnpm install
 # 确保 VITE_API_PROXY_URL 指向后端，默认 http://127.0.0.1:9999
 export VITE_API_PROXY_URL=http://127.0.0.1:9999
 export VITE_DISABLE_DRAG_VERIFY=true
-
+OB
 # 6.3 启动前端（开发模式）
 pnpm dev --host 0.0.0.0 --port 3006
 # 或：VITE_PORT=3006 npx vite --host 0.0.0.0 --port 3006

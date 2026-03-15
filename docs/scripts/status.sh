@@ -2,14 +2,13 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROJECT_ROOT="$(cd "${ROOT_DIR}/.." && pwd)"
 ENV_FILE="${ROOT_DIR}/.env.platform"
 PID_DIR="${ROOT_DIR}/runtime/pids"
 
-if [[ -f "${ENV_FILE}" ]]; then
-  set -a
-  source "${ENV_FILE}"
-  set +a
-fi
+# 加载单一事实源配置
+[[ -f "${PROJECT_ROOT}/platform.config.env" ]] && set -a && source "${PROJECT_ROOT}/platform.config.env" && set +a
+[[ -f "${ENV_FILE}" ]] && set -a && source "${ENV_FILE}" && set +a
 
 check_pid() {
   local name="$1"
