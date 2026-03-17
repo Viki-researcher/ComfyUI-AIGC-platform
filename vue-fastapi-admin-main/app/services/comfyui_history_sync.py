@@ -130,7 +130,11 @@ async def sync_once(*, max_items: int = 200) -> int:
 
     返回本次新增的日志条数。
     """
+    from app.api.internal.comfy import get_callback_cache, has_callback
+
     services = await ComfyUIService.filter(status="online").all()
+    # 有回调缓存的服务优先处理，确保归属到正确项目（避免多项目共享同一 ComfyUI 时重复计数）
+    services = sorted(services, key=lambda s: (0 if has_callback(s.project_id) else 1, s.project_id))
     created = 0
     for s in services:
         if not s.comfy_url:
@@ -144,13 +148,13 @@ async def sync_once(*, max_items: int = 200) -> int:
         project = await Project.filter(id=s.project_id).first()
         project_name = project.name if project else f"project_{s.project_id}"
 
-        from app.api.internal.comfy import get_callback_cache
         cb_data = get_callback_cache(s.project_id)
 
         for prompt_id, item in history.items():
             if not prompt_id:
                 continue
-            exists = await GenerationLog.filter(project_id=s.project_id, prompt_id=str(prompt_id)).exists()
+            # prompt_id 全局唯一：同一 ComfyUI 执行只产生一条记录，避免多项目共享实例时重复计数
+            exists = await GenerationLog.filter(prompt_id=str(prompt_id)).exists()
             if exists:
                 continue
 

@@ -40,12 +40,6 @@ export const platformRoutes: AppRouteRecord = {
       meta: { title: 'Prompt助手', keepAlive: false }
     },
     {
-      path: 'stats',
-      name: 'PlatformStats',
-      component: '/platform/stats',
-      meta: { title: '数据统计', keepAlive: true }
-    },
-    {
       path: 'logs',
       name: 'PlatformLogs',
       component: '/platform/logs',

@@ -6,7 +6,9 @@
 # ============================================================================
 
 import os
+import re
 import threading
+import time
 import torch
 from PIL import Image
 from io import BytesIO
@@ -18,8 +20,10 @@ FIXED_BASE_URL = "https://147ai.com"
 LOG_PREFIX = "[Gemini-MultiImage]"
 
 
-def _log(step: str, msg: str = ""):
-    """统一格式的步骤日志"""
+def _log(step: str, msg: str = "", elapsed: float | None = None):
+    """统一格式的步骤日志，elapsed 为耗时（秒）时追加到日志"""
+    if elapsed is not None:
+        msg = f"{msg} 耗时 {elapsed:.2f}s" if msg else f"耗时 {elapsed:.2f}s"
     line = f"{LOG_PREFIX} [{step}] {msg}".strip()
     print(line)
 
@@ -233,12 +237,14 @@ class ComfyUI_Gemini_Parallel_MultiImage:
 
             config = types.GenerateContentConfig(**config_kwargs)
             _log("single_task", f"Task #{task_id} 调用 API generate_content...")
+            t_api = time.time()
             response = client.models.generate_content(
                 model=model,
                 contents=contents,
                 config=config
             )
-            _log("single_task", f"Task #{task_id} API 返回，解析响应...")
+            api_elapsed = time.time() - t_api
+            _log("single_task", f"Task #{task_id} API 出图", elapsed=api_elapsed)
 
             response_text = ""
             generated_images = []
@@ -277,12 +283,15 @@ class ComfyUI_Gemini_Parallel_MultiImage:
                           image1=None, image2=None, image3=None, image4=None,
                           image5=None, image6=None, image7=None, image8=None):
 
+        t0 = time.time()
         _log("step_0", "检查项目生成配额...")
         allowed, quota_msg = _check_quota()
+        _log("step_0", "检查项目生成配额...", elapsed=time.time() - t0)
         if not allowed:
             _log("step_0", quota_msg)
             raise RuntimeError(quota_msg)
 
+        t1 = time.time()
         _log("step_1", "节点开始执行：参数校验")
         if not api_key.strip():
             error_msg = "❌ API key is required"
@@ -290,16 +299,19 @@ class ComfyUI_Gemini_Parallel_MultiImage:
             print(error_msg)
             blank_image = Image.new('RGB', (1024, 1024), color='white')
             return (pil2tensor(blank_image), error_msg)
+        _log("step_1", "参数校验", elapsed=time.time() - t1)
 
         try:
+            t2 = time.time()
             _log("step_2", "收集输入图像 (image1~image8)")
             all_images = [image1, image2, image3, image4, image5, image6, image7, image8]
             image_count = sum(1 for x in all_images if x is not None)
-            _log("step_2", f"有效输入图像数: {image_count}")
+            _log("step_2", f"有效输入图像数: {image_count}", elapsed=time.time() - t2)
 
             pbar = comfy.utils.ProgressBar(100)
             pbar.update_absolute(5)
 
+            t3 = time.time()
             _log("step_3", f"构建 {generation_count} 个并发生成任务 (mode={mode}, model={model})")
             print(f"🔄 Parallel multi-image: {generation_count} generations, {image_count} input image(s)")
 
@@ -317,12 +329,13 @@ class ComfyUI_Gemini_Parallel_MultiImage:
                     "task_id": i + 1
                 }
                 tasks.append(task_data)
-            _log("step_3", f"任务列表已构建，共 {len(tasks)} 个任务")
+            _log("step_3", f"任务列表已构建，共 {len(tasks)} 个任务", elapsed=time.time() - t3)
 
             pbar.update_absolute(15)
 
             results = []
             successful_results = []
+            t4 = time.time()
             _log("step_4", f"提交并发执行 (max_workers={min(generation_count, 5)})")
             with concurrent.futures.ThreadPoolExecutor(max_workers=min(generation_count, 5)) as executor:
                 future_to_task = {executor.submit(self._generate_single_image, t): t for t in tasks}
@@ -345,9 +358,12 @@ class ComfyUI_Gemini_Parallel_MultiImage:
                     pbar.update_absolute(progress)
 
             pbar.update_absolute(95)
+            step4_elapsed = time.time() - t4
+            _log("step_4", f"并发生成完成 (API 调用为主)", elapsed=step4_elapsed)
             _log("step_5", f"所有任务执行完毕，成功 {len(successful_results)}，失败 {len(tasks) - len(successful_results)}")
 
             if successful_results:
+                t6 = time.time()
                 total_images = sum(t.shape[0] for t in successful_results)
                 final_tensor = torch.cat(successful_results, dim=0)
                 response_info = "🎉 Parallel multi-image generation completed!\n"
@@ -355,14 +371,14 @@ class ComfyUI_Gemini_Parallel_MultiImage:
                 response_info += f"Total tasks: {generation_count}\n"
                 response_info += f"Successful: {len(successful_results)}\n"
                 response_info += f"Failed: {generation_count - len(successful_results)}\n\n"
-                sorted_results = sorted(
-                    results,
-                    key=lambda x: int(x[1].split('#')[1].split(':')[0]) if 'Task #' in x[1] else 999
-                )
+                def _task_sort_key(item):
+                    m = re.search(r'Task #(\d+)', item[1])
+                    return int(m.group(1)) if m else 999
+
+                sorted_results = sorted(results, key=_task_sort_key)
                 for result in sorted_results:
                     response_info += f"{result[1]}\n\n"
                 _log("step_6", f"汇总结果：共 {total_images} 张图片")
-
                 _send_platform_callback(
                     image_count=total_images,
                     status="成功",
@@ -374,6 +390,7 @@ class ComfyUI_Gemini_Parallel_MultiImage:
                         "total_images": total_images,
                     },
                 )
+                _log("step_6", f"汇总+回调", elapsed=time.time() - t6)
 
                 pbar.update_absolute(100)
                 return (final_tensor, response_info.strip())

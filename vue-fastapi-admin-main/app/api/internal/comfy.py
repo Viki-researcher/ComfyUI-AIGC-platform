@@ -23,6 +23,11 @@ def get_callback_cache(project_id: int) -> dict[str, Any] | None:
     return _callback_cache.pop(project_id, None)
 
 
+def has_callback(project_id: int) -> bool:
+    """检查某项目是否有待消费的回调缓存（不弹出）。用于 history sync 确定归属。"""
+    return project_id in _callback_cache
+
+
 class ComfyCallbackIn(BaseModel):
     project_id: int = Field(..., description="项目ID")
     prompt_id: Optional[str] = Field(None, description="ComfyUI prompt_id")

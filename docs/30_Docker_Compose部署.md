@@ -5,7 +5,7 @@
 ```
 ┌─────────────┐    ┌─────────────┐
 │   Frontend   │───▶│   Backend   │
-│  (Vite:3006) │    │(FastAPI:9999)│
+│  (Vite:3006) │    │(FastAPI:8989)│
 └─────────────┘    └──────┬──────┘
                           │
                    ┌──────┴──────┐
@@ -44,7 +44,7 @@ docker compose down -v
 |------|------|------|----------|
 | `db` | postgres:16-alpine | 5432 | `pg_isready` |
 | `redis` | redis:7-alpine | 6379 | `redis-cli ping` |
-| `backend` | 自定义构建 | 9999 | 依赖 db 就绪 |
+| `backend` | 自定义构建 | 8989 | 依赖 db 就绪 |
 | `frontend` | 自定义构建 | 3006 | 依赖 backend |
 
 ## 数据持久化
@@ -61,8 +61,7 @@ docker compose down -v
 
 - `DB_DEFAULT_CONNECTION=postgres`
 - `POSTGRES_HOST=db`（使用 Docker 服务名）
-- `COMFYUI_REPO_PATH=/workspace/ComfyUI-master-fitow`
-- `ANNOTATION_TOOL_PATH=/workspace/sam3-annotation-tool`
+- `COMFYUI_REPO_PATH`、`ANNOTATION_TOOL_PATH`：容器内路径，由 volume 挂载决定（宿主机使用相对路径 `./ComfyUI-master-fitow`、`./sam3-annotation-tool` 挂载到容器内）
 
 ## 自定义配置
 

@@ -9,7 +9,7 @@ This is a **Data Generation Platform** (数据生成平台) monorepo — **curre
 | Component | Tech | Port | Required |
 |---|---|---|---|
 | `art-design-pro/` | Vue 3 + Vite + Element Plus + TailwindCSS | 3006 | Yes |
-| `vue-fastapi-admin-main/` | FastAPI + Tortoise ORM + Aerich | 9999 | Yes |
+| `vue-fastapi-admin-main/` | FastAPI + Tortoise ORM + Aerich | 8989 | Yes |
 | `ComfyUI-master-fitow/` | ComfyUI (AI image gen engine) | 8200+ | Optional |
 | `sam3-annotation-tool/` | SAM3 Annotation (Gradio) | 7860+ | Optional |
 
@@ -18,20 +18,21 @@ This is a **Data Generation Platform** (数据生成平台) monorepo — **curre
 Default mode uses PostgreSQL. Ensure PostgreSQL is running with `data_generation` database:
 
 ```bash
-cd /workspace/vue-fastapi-admin-main
+cd vue-fastapi-admin-main
 DB_DEFAULT_CONNECTION=postgres \
 POSTGRES_HOST=127.0.0.1 POSTGRES_PORT=5432 POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres POSTGRES_DB=data_generation \
-COMFYUI_REPO_PATH=/workspace/ComfyUI-master-fitow \
-COMFYUI_PYTHON=/usr/bin/python3 \
+COMFYUI_REPO_PATH=../ComfyUI-master-fitow \
+COMFYUI_PYTHON=../ComfyUI-master-fitow/.venv/bin/python3 \
 COMFYUI_FORCE_CPU=true \
-ANNOTATION_TOOL_PATH=/workspace/sam3-annotation-tool \
+ANNOTATION_TOOL_PATH=../sam3-annotation-tool \
+ANNOTATION_PYTHON=../sam3-annotation-tool/.venv/bin/python3 \
 PLATFORM_INTERNAL_SECRET=platform_secret_key_2026 \
 LLM_API_KEY=<your-llm-api-key> \
 LLM_API_BASE_URL=<your-llm-base-url> \
 LLM_PROVIDER=<your-llm-provider> \
 LLM_MODEL=<your-llm-model> \
 PYTHONUNBUFFERED=1 \
-.venv/bin/python3 -m uvicorn app:app --host 0.0.0.0 --port 9999
+.venv/bin/python3 -m uvicorn app:app --host 0.0.0.0 --port 8989
 ```
 
 LLM env vars can also be set in `vue-fastapi-admin-main/.env` (pydantic-settings auto-loads it). The backend has a **LLM key fallback** mechanism (v0.3+): if the env var `LLM_API_KEY` looks invalid (too short, pure digits, common placeholders like `"123"`), it automatically falls back to the value in `.env`. Same for `LLM_API_BASE_URL`, `LLM_PROVIDER`, `LLM_MODEL`.
@@ -48,12 +49,12 @@ The backend auto-runs DB migrations and seeds default data on startup, including
 ### Running the frontend
 
 ```bash
-cd /workspace/art-design-pro
-VITE_PORT=3006 VITE_API_PROXY_URL="http://127.0.0.1:9999" VITE_DISABLE_DRAG_VERIFY="true" \
+cd art-design-pro
+VITE_PORT=3006 VITE_API_PROXY_URL="http://127.0.0.1:8989" VITE_DISABLE_DRAG_VERIFY="true" \
 npx vite --host 0.0.0.0 --port 3006 --open false
 ```
 
-The Vite dev server proxies `/api` and `/output` requests to the backend at `http://127.0.0.1:9999`.
+The Vite dev server proxies `/api` and `/output` requests to the backend at `http://127.0.0.1:8989`.
 
 ### Gotchas
 
@@ -66,6 +67,7 @@ The Vite dev server proxies `/api` and `/output` requests to the backend at `htt
 - **API route registration**: `init_apis()` now always refreshes the API table on startup. If you add new API routes/tags, they will be auto-registered on next backend restart. No manual intervention needed.
 - **LLM API key fallback (v0.3+)**: `Settings.model_post_init` detects obviously invalid `LLM_API_KEY` values (e.g. `"123"`, `"test"`, anything < 8 chars) and automatically reads the real key from `.env`. This protects against Cloud Agent injected placeholder secrets overriding valid keys. Same logic applies to `LLM_API_BASE_URL`, `LLM_PROVIDER`, `LLM_MODEL`.
 - **image_count field**: `GenerationLog` has an `image_count` field (default=1). The history sync auto-parses ComfyUI output to count actual images. Dashboard/stats use `SUM(image_count)` for accurate totals.
+- **prompt_id global uniqueness (v0.4+)**: History sync treats `prompt_id` as globally unique. One ComfyUI execution produces one `GenerationLog` record. This prevents duplicate counts when multiple projects share the same ComfyUI instance (same port). Services with callback cache are processed first to ensure correct project attribution.
 - **Image output organization**: Generated images are auto-organized to `{output_dir}/{project_name}/{YYYYMMDD}/` by the history sync. Static files are served at `/output/` path.
 - **Dashboard timezone (v0.4+)**: The dashboard "今日生成量" query uses `created_at` (not `timestamp`) with explicit `Asia/Shanghai` timezone. This is because `datetime.now()` returns system UTC while Tortoise ORM interprets naively-stored datetimes as Shanghai time, causing an 8-hour offset. Do NOT change this back to `timestamp` without understanding the timezone implications.
 - **Audit middleware safety (v0.3+)**: `HttpAuditLogMiddleware.dispatch` wraps `before_request` / `after_request` in `try/except` so that audit-log failures never swallow the actual API response. Long-running POST endpoints (`open_comfy`, `open_annotation`) are excluded from audit logging via `exclude_paths`.

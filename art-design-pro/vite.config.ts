@@ -47,11 +47,23 @@ export default ({ mode }: { mode: string }) => {
       proxy: {
         '/api': {
           target: VITE_API_PROXY_URL,
-          changeOrigin: true
+          changeOrigin: true,
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq, req) => {
+              if (req.headers.host) proxyReq.setHeader('X-Forwarded-Host', req.headers.host)
+              if (req.headers['x-forwarded-proto']) proxyReq.setHeader('X-Forwarded-Proto', req.headers['x-forwarded-proto'])
+            })
+          }
         },
         '/output': {
           target: VITE_API_PROXY_URL,
-          changeOrigin: true
+          changeOrigin: true,
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq, req) => {
+              if (req.headers.host) proxyReq.setHeader('X-Forwarded-Host', req.headers.host)
+              if (req.headers['x-forwarded-proto']) proxyReq.setHeader('X-Forwarded-Proto', req.headers['x-forwarded-proto'])
+            })
+          }
         }
       },
       host: true

@@ -1,7 +1,7 @@
 #!/bin/bash
-# 推送到GitHub的脚本
+# 推送到GitHub的脚本（脚本所在目录：docs/scripts/，项目根目录为 docs/../）
 
-cd /home/admin1/ai02/codeyard/wk_codeyard/Code_backup/ComfulUI
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # 配置Git用户信息
 git config user.name "Viki-researcher"

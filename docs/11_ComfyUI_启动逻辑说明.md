@@ -138,7 +138,7 @@ async def heartbeat_once():
 | 环境变量 | 默认值 | 说明 |
 |---------|--------|------|
 | `COMFYUI_REPO_PATH` | - | ComfyUI 仓库路径（必填） |
-| `COMFYUI_PYTHON` | - | ComfyUI Python 解释器路径（必填） |
+| `COMFYUI_PYTHON` | - | ComfyUI venv 的 python 路径（必填，如 `ComfyUI-master-fitow/.venv/bin/python3`） |
 | `COMFYUI_PORT_RANGE` | `8200-8299` | 端口分配范围 |
 | `COMFYUI_LISTEN` | `127.0.0.1` | 监听地址 |
 | `COMFYUI_STARTUP_TIMEOUT_SECONDS` | `240` | 启动超时时间 |

@@ -6,9 +6,9 @@
 
 ## 1. 端口与地址约定（开发默认）
 
-- **后端 FastAPI**：`http://127.0.0.1:9999`\n
+- **后端 FastAPI**：`http://127.0.0.1:8989`\n
   - API 前缀：`/api`（例如登录：`POST /api/auth/login`）\n
-  - Swagger：`http://127.0.0.1:9999/docs`\n
+  - Swagger：`http://127.0.0.1:8989/docs`\n
 - **前端 Vite DevServer**：`http://127.0.0.1:3006`\n
   - 前端所有请求以 `/api/...` 开头，通过 Vite 代理转发到后端\n
 - **ComfyUI 实例**：由后端按项目按需拉起\n
@@ -41,7 +41,7 @@
 
 将 `art-design-pro/.env.development` 里的 `VITE_API_PROXY_URL` 指向后端，例如：
 
-- `VITE_API_PROXY_URL = http://127.0.0.1:9999`
+- `VITE_API_PROXY_URL = http://127.0.0.1:8989`
 
 说明：前端请求会统一走 `/api/...`，Vite 代理把 `/api` 转发到该地址。
 
@@ -69,8 +69,8 @@
 建议新增并统一使用下列环境变量（后续会在后端代码中读取）：\n
 
 - `COMFYUI_REPO_PATH`：ComfyUI 仓库目录（本仓库默认：`.../ComfyUI-master-fitow`）\n
-- `COMFYUI_PYTHON`：ComfyUI conda 环境的 python 路径\n
-  - 推荐填写 `$(conda info --base)/envs/datagen-comfyui/bin/python`\n
+- `COMFYUI_PYTHON`：ComfyUI venv 的 python 路径（相对路径）\n
+  - 推荐填写 `ComfyUI-master-fitow/.venv/bin/python3` 或 `${COMFULUI_ROOT}/ComfyUI-master-fitow/.venv/bin/python3`\n
 - `COMFYUI_LISTEN`：ComfyUI 进程监听地址（传给 `python main.py --listen`）\n
   - 仅本机联调：`127.0.0.1`\n
   - 局域网/远程访问：`0.0.0.0`\n
@@ -86,11 +86,12 @@
 - `COMFYUI_HEARTBEAT_INTERVAL_SECONDS=30`：心跳检查间隔\n
 - `COMFYUI_STARTUP_TIMEOUT_SECONDS=240`：`open_comfy` 等待启动健康检查的超时时间\n
 - `PLATFORM_INTERNAL_SECRET`：启用 ComfyUI 回调写日志的 secret（Header：`X-Platform-Secret`）\n
-- `PLATFORM_CALLBACK_URL`：后端回调地址（默认：`http://127.0.0.1:9999/api/internal/comfy/callback`）\n
+- `PLATFORM_CALLBACK_URL`：后端回调地址（默认：`http://127.0.0.1:8989/api/internal/comfy/callback`）\n
 
 ### 3.3 数据标注工具（SAM3 Annotation Tool）
 
 - `ANNOTATION_TOOL_PATH`：标注工具目录（本仓库默认：`.../sam3-annotation-tool`）
+- `ANNOTATION_PYTHON`：标注工具 venv 的 python 路径（相对路径，如 `sam3-annotation-tool/.venv/bin/python3`）
 - `ANNOTATION_LISTEN`：Gradio 监听地址（`127.0.0.1` 或 `0.0.0.0`）
 - `ANNOTATION_PORT_RANGE=7860-7899`：标注工具端口池
 - `ANNOTATION_LOG_DIR`：标注工具日志目录（默认 `./runtime/annotation_logs`）
@@ -110,9 +111,8 @@ ComfyUI 启动参数（关键）：\n
 示例（未来由后端启动，不建议手工长期运行多个实例）：\n
 
 ```bash
-conda activate datagen-comfyui
 cd ComfyUI-master-fitow
-python main.py --listen 127.0.0.1 --port 8200 --disable-auto-launch
+.venv/bin/python3 main.py --listen 127.0.0.1 --port 8200 --disable-auto-launch
 ```
 
 ---

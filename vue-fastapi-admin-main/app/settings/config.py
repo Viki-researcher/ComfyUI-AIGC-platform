@@ -67,8 +67,10 @@ class Settings(BaseSettings):
     COMFYUI_INTERNAL_HOST: str = ""
     # 前端打开 ComfyUI 的对外访问基地址（可选）。
     # 例如：COMFYUI_PUBLIC_BASE_URL="http://10.10.1.199"（无需带端口，端口由后端分配后拼接）
-    # 为空时：后端会尝试从请求的 Host / X-Forwarded-* 推导。
+    # 为空时：后端会尝试从请求的 Host / X-Forwarded-* 推导；若仍为 localhost 则用 PLATFORM_PUBLIC_HOST。
     COMFYUI_PUBLIC_BASE_URL: str = ""
+    # 平台对外 IP/host（局域网访问时必填）。当请求 Host 为 localhost 时，ComfyUI/标注跳转 URL 使用此值。
+    PLATFORM_PUBLIC_HOST: str = ""
     COMFYUI_PORT_RANGE: str = "8200-8299"
     COMFYUI_INSTANCE_BASE_DIR: str = os.path.join("runtime", "comfy_instances")
     COMFYUI_LOG_DIR: str = os.path.join("runtime", "comfy_logs")
@@ -83,10 +85,11 @@ class Settings(BaseSettings):
 
     # ComfyUI -> 平台回调（可选）
     PLATFORM_INTERNAL_SECRET: str = ""
-    PLATFORM_CALLBACK_URL: str = "http://127.0.0.1:9999/api/internal/comfy/callback"
+    PLATFORM_CALLBACK_URL: str = "http://127.0.0.1:8989/api/internal/comfy/callback"
 
     # 数据标注（SAM3 Annotation Tool）
     ANNOTATION_TOOL_PATH: str = ""
+    ANNOTATION_PYTHON: str = ""  # 标注工具 venv 的 python 路径，为空时回退到 uv/python3
     ANNOTATION_LISTEN: str = "127.0.0.1"
     ANNOTATION_INTERNAL_HOST: str = ""
     ANNOTATION_PUBLIC_BASE_URL: str = ""

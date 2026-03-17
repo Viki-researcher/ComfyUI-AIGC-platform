@@ -88,11 +88,15 @@ async def start_annotation_instance(user_id: int, project_id: int) -> dict:
     env["GRADIO_SERVER_NAME"] = listen
 
     python_exec = "python3"
-    uv_path = os.popen("which uv 2>/dev/null").read().strip()
-    if uv_path:
-        cmd = [uv_path, "run", "python", "app.py"]
+    ann_python = (settings.ANNOTATION_PYTHON or "").strip()
+    if ann_python and os.path.isfile(ann_python) and os.access(ann_python, os.X_OK):
+        cmd = [ann_python, "app.py"]
     else:
-        cmd = [python_exec, "app.py"]
+        uv_path = os.popen("which uv 2>/dev/null").read().strip()
+        if uv_path:
+            cmd = [uv_path, "run", "python", "app.py"]
+        else:
+            cmd = [python_exec, "app.py"]
 
     logger.info(f"[Annotation] starting: {' '.join(cmd)} on port {port}")
     with open(log_path, "ab", buffering=0) as f:

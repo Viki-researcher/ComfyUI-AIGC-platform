@@ -55,7 +55,7 @@
 ## 仓库目录结构
 
 ```
-/workspace
+<项目根目录>/
 ├── art-design-pro/           # 前端（Vue3 + Vite + Element Plus）
 ├── vue-fastapi-admin-main/   # 后端（FastAPI + Tortoise ORM）
 ├── ComfyUI-master-fitow/     # ComfyUI 引擎（AI图像生成）

@@ -55,7 +55,7 @@ services:
       ANNOTATION_LISTEN: "0.0.0.0"
       PYTHONUNBUFFERED: "1"
     ports:
-      - "9999:9999"
+      - "8989:8989"
     volumes:
       - ./ComfyUI-master-fitow:/workspace/ComfyUI-master-fitow
       - ./sam3-annotation-tool:/workspace/sam3-annotation-tool
@@ -70,7 +70,7 @@ services:
     depends_on:
       - backend
     environment:
-      VITE_API_PROXY_URL: http://backend:9999
+      VITE_API_PROXY_URL: http://backend:8989
       VITE_PORT: "3006"
     ports:
       - "3006:3006"

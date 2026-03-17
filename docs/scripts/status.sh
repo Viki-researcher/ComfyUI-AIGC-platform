@@ -53,6 +53,6 @@ if [[ "${FRONTEND_CHECK_HOST}" == "0.0.0.0" || "${FRONTEND_CHECK_HOST}" == "::" 
   FRONTEND_CHECK_HOST="127.0.0.1"
 fi
 
-check_http "backend" "http://${BACKEND_CHECK_HOST}:${BACKEND_PORT:-9999}/openapi.json"
+check_http "backend" "http://${BACKEND_CHECK_HOST}:${BACKEND_PORT:-8989}/openapi.json"
 check_http "frontend" "http://${FRONTEND_CHECK_HOST}:${FRONTEND_PORT:-3006}/"
 

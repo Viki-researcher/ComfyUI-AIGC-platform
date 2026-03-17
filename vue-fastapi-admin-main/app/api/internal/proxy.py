@@ -2,7 +2,7 @@
 后端代理：中转 ComfyUI 自定义节点的外部 API 调用（如 147ai.com），
 实现对 API 使用的记录、统计与管控。
 
-节点侧只需将 base_url 从 https://147ai.com 改为 http://127.0.0.1:9999/api/internal/proxy/147ai，
+节点侧只需将 base_url 从 https://147ai.com 改为 http://127.0.0.1:8989/api/internal/proxy/147ai，
 后端负责：
   1. 鉴权（PLATFORM_INTERNAL_SECRET）
   2. 转发请求至真实 API

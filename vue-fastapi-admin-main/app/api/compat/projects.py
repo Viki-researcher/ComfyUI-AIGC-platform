@@ -29,36 +29,38 @@ def _now_str(dt: Optional[datetime]) -> str:
 
 def _get_public_comfy_url(*, port: int, request: Request) -> str:
     """
-    返回给前端打开的 ComfyUI 地址。
-    - 优先使用 COMFYUI_PUBLIC_BASE_URL
-    - 否则从请求头推导（X-Forwarded-Host / Host / request.url）
+    返回给前端打开的 ComfyUI/标注地址（局域网访问时需使用主机 IP，避免 localhost 导致其他机器无法访问）。
+    - 优先使用 COMFYUI_PUBLIC_BASE_URL（或 ANNOTATION 同理，本函数共用）
+    - 否则从请求头推导（X-Forwarded-Host / Host）
+    - 若推导结果为 localhost/127.0.0.1，则使用 PLATFORM_PUBLIC_HOST
     """
     base = (settings.COMFYUI_PUBLIC_BASE_URL or "").strip().rstrip("/")
     if base:
-        # 支持两种写法：
-        # 1) http://10.10.1.199
-        # 2) 10.10.1.199
         if "://" not in base:
             base = f"http://{base}"
         from urllib.parse import urlparse
 
         u = urlparse(base)
         if not u.hostname:
-            return f"http://127.0.0.1:{port}"
-        scheme = u.scheme or "http"
-        return f"{scheme}://{u.hostname}:{port}"
+            pass
+        else:
+            scheme = u.scheme or "http"
+            return f"{scheme}://{u.hostname}:{port}"
 
     forwarded_host = (request.headers.get("x-forwarded-host") or "").split(",", 1)[0].strip()
     host = forwarded_host or (request.headers.get("host") or "").strip() or (request.url.hostname or "")
     proto = (request.headers.get("x-forwarded-proto") or "").split(",", 1)[0].strip() or request.url.scheme or "http"
 
-    # host 可能包含端口（如 10.10.1.199:3006），这里只取 hostname 部分
     hostname = ""
     if host.startswith("[") and "]" in host:
         hostname = host[1 : host.find("]")]
     else:
         hostname = host.split(":", 1)[0]
     hostname = hostname or "127.0.0.1"
+
+    # 若为 localhost，且配置了 PLATFORM_PUBLIC_HOST，则使用主机 IP（支持局域网其他机器访问）
+    if hostname in ("127.0.0.1", "localhost", "::1") and (settings.PLATFORM_PUBLIC_HOST or "").strip():
+        hostname = (settings.PLATFORM_PUBLIC_HOST or "").strip().split(":", 1)[0]
 
     return f"{proto}://{hostname}:{port}"
 

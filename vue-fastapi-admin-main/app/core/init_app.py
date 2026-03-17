@@ -174,28 +174,6 @@ async def init_menus():
                 component="/system/api",
                 keepalive=False,
             ),
-            Menu(
-                menu_type=MenuType.MENU,
-                name="部门管理",
-                path="dept",
-                order=5,
-                parent_id=parent_menu.id,
-                icon="mingcute:department-line",
-                is_hidden=False,
-                component="/system/dept",
-                keepalive=False,
-            ),
-            Menu(
-                menu_type=MenuType.MENU,
-                name="审计日志",
-                path="auditlog",
-                order=6,
-                parent_id=parent_menu.id,
-                icon="ph:clipboard-text-bold",
-                is_hidden=False,
-                component="/system/auditlog",
-                keepalive=False,
-            ),
         ]
         await Menu.bulk_create(children_menu)
         # 注意：菜单数据需要与前端 views 组件路径一致，否则动态路由会加载失败。
@@ -304,11 +282,30 @@ async def ensure_platform_menus():
         },
     )
     await ensure_child(name="Prompt助手", path="prompt", order=2, component="/platform/prompt")
-    await ensure_child(name="数据统计", path="stats", order=3, component="/platform/stats")
     await ensure_child(name="生成日志", path="logs", order=4, component="/platform/logs")
     await ensure_child(name="服务器监控", path="monitor", order=5, component="/platform/monitor")
     await ensure_child(name="工作流编辑器", path="workflow", order=6, component="/platform/workflow-editor")
     await ensure_child(name="用量与计费", path="usage", order=7, component="/platform/usage")
+
+
+async def ensure_remove_unused_menus():
+    """
+    移除已废弃的菜单项（部门管理、审计日志、数据统计已合并到仪表盘）。
+    用于已有数据库的迁移。
+    """
+    system = await Menu.filter(path="/system").first()
+    platform = await Menu.filter(path="/platform").first()
+    if system:
+        for path in ("dept", "auditlog"):
+            m = await Menu.filter(parent_id=system.id, path=path).first()
+            if m:
+                await m.delete()
+                logger.info(f"Removed unused menu: /system/{path}")
+    if platform:
+        m = await Menu.filter(parent_id=platform.id, path="stats").first()
+        if m:
+            await m.delete()
+            logger.info("Removed unused menu: /platform/stats (merged into dashboard)")
 
 
 async def ensure_role_policies():
@@ -389,6 +386,7 @@ async def init_data():
     await init_superuser()
     await init_menus()
     await ensure_platform_menus()
+    await ensure_remove_unused_menus()
     await init_apis()
     await ensure_menu_auth_marks()
     await init_roles()

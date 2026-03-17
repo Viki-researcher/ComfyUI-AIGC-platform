@@ -329,7 +329,7 @@ docker compose up -d
 
 # 3. 访问
 # 前端: http://localhost:3006
-# 后端: http://localhost:9999
+# 后端: http://localhost:8989
 # 默认账号: admin / 123456
 ```
 
@@ -338,7 +338,7 @@ docker compose up -d
 | 服务 | 镜像 | 端口 | 说明 |
 |------|------|------|------|
 | `postgres` | postgres:16-alpine | 5432 | PostgreSQL 数据库 |
-| `backend` | 自建 (Python 3.11) | 9999 | FastAPI 后端 |
+| `backend` | 自建 (Python 3.11) | 8989 | FastAPI 后端 |
 | `frontend` | 自建 (Node → Nginx) | 3006 | Vue 前端 |
 
 #### 开发模式
