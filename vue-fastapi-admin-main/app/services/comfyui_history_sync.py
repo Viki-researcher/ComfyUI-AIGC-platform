@@ -56,13 +56,20 @@ def _collect_output_files(history_item: dict[str, Any]) -> list[dict[str, str]]:
     return files
 
 
+def _project_output_dir_name(project_id: int) -> str:
+    """项目输出目录名（唯一，用于路径拼接）。使用 project_id 避免项目名冲突导致跨项目混图。"""
+    return f"p{project_id}"
+
+
 def _organize_output_images(
     base_dir: str | None,
+    project_id: int,
     project_name: str,
     output_files: list[dict[str, str]],
 ) -> int:
     """
-    将 ComfyUI 输出图片复制到统一输出目录 {OUTPUT_BASE_DIR}/{project_name}/{YYYYMMDD}/。
+    将 ComfyUI 输出图片复制到统一输出目录 {OUTPUT_BASE_DIR}/p{project_id}/{YYYYMMDD}/。
+    使用 project_id 确保目录唯一，避免项目名冲突导致跨项目混图。
     文件重命名为 {项目名}_{时间戳}_{原名}.png 避免覆盖。
     保留原始文件不动（ComfyUI 预览和 Assets 面板需要读取它们）。
     返回处理的文件数。
@@ -77,12 +84,13 @@ def _organize_output_images(
     from app.settings.config import settings
 
     date_str = datetime.now().strftime("%Y%m%d")
+    dir_name = _project_output_dir_name(project_id)
     safe_name = "".join(c if c.isalnum() or c in "-_ " else "_" for c in project_name).strip()
 
     output_base = Path(settings.OUTPUT_BASE_DIR)
     if not output_base.is_absolute():
         output_base = Path(settings.BASE_DIR) / output_base
-    unified_dir = output_base / safe_name / date_str
+    unified_dir = output_base / dir_name / date_str
     unified_dir.mkdir(parents=True, exist_ok=True)
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -167,7 +175,7 @@ async def sync_once(*, max_items: int = 200) -> int:
                 image_count = cb_data["image_count"]
 
             if output_files and s.base_dir:
-                _organize_output_images(s.base_dir, project_name, output_files)
+                _organize_output_images(s.base_dir, s.project_id, project_name, output_files)
 
             details = {
                 "prompt_id": str(prompt_id),

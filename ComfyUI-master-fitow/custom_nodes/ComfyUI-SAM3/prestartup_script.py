@@ -53,6 +53,7 @@ def main():
     assets_dst = comfy_root / "input"
 
     if assets_src.exists():
+        assets_dst.mkdir(parents=True, exist_ok=True)
         print(f"[SAM3] Copying image assets to {assets_dst}...")
         copied = 0
         skipped = 0

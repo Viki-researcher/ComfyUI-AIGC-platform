@@ -188,10 +188,11 @@ def _migrate_to_shared(local_wf: Path, shared_wf: Path) -> None:
 
 
 def _write_extra_model_paths(cfg: ComfyUIConfig, inst_dir: Path) -> Path:
+    # 不包含 custom_nodes：实例目录的 custom_nodes 已软链接到仓库，folder_paths 默认路径已足够。
+    # 若再添加 repo_path/custom_nodes 会导致同一套节点被加载两次，prestartup 重复执行。
     data = {
         "comfyui": {
             "base_path": str(cfg.repo_path),
-            "custom_nodes": "custom_nodes",
             "checkpoints": "models/checkpoints",
             "text_encoders": "models/text_encoders",
             "clip_vision": "models/clip_vision",

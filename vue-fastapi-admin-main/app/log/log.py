@@ -1,3 +1,4 @@
+import os
 import sys
 
 from loguru import logger as loguru_logger
@@ -17,7 +18,17 @@ class Loggin:
         loguru_logger.remove()
         loguru_logger.add(sink=sys.stdout, level=self.level)
 
-        # logger.add("my_project.log", level=level, rotation="100 MB")  # Output log messages to a file
+        # 错误日志写入文件，便于后台运行时排查（如标注/ComfyUI 启动失败等）
+        log_dir = os.path.join(settings.BASE_DIR, "runtime")
+        os.makedirs(log_dir, exist_ok=True)
+        error_log_path = os.path.join(log_dir, "backend_error.log")
+        loguru_logger.add(
+            sink=error_log_path,
+            level="ERROR",
+            rotation="10 MB",
+            retention="7 days",
+            encoding="utf-8",
+        )
         return loguru_logger
 
 

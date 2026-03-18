@@ -95,7 +95,9 @@ class Settings(BaseSettings):
     ANNOTATION_PUBLIC_BASE_URL: str = ""
     ANNOTATION_PORT_RANGE: str = "7860-7899"
     ANNOTATION_LOG_DIR: str = os.path.join("runtime", "annotation_logs")
-    ANNOTATION_STARTUP_TIMEOUT_SECONDS: int = 60
+    ANNOTATION_STARTUP_TIMEOUT_SECONDS: int = 300  # SAM3 模型加载较慢，默认 5 分钟
+    # SAM3 模型本地路径（HuggingFace 格式目录）。留空则使用 facebook/sam3（Hub 或缓存）
+    ANNOTATION_SAM3_MODEL_PATH: str = ""
 
     # ===== LLM / AI Chat 配置 =====
     LLM_PROVIDER: str = "openai"

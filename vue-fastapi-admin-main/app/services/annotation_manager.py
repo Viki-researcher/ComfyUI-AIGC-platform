@@ -86,6 +86,8 @@ async def start_annotation_instance(user_id: int, project_id: int) -> dict:
     env = os.environ.copy()
     env["GRADIO_SERVER_PORT"] = str(port)
     env["GRADIO_SERVER_NAME"] = listen
+    if (sam3_path := (settings.ANNOTATION_SAM3_MODEL_PATH or "").strip()):
+        env["SAM3_MODEL_PATH"] = sam3_path
 
     python_exec = "python3"
     ann_python = (settings.ANNOTATION_PYTHON or "").strip()
@@ -113,8 +115,15 @@ async def start_annotation_instance(user_id: int, project_id: int) -> dict:
     deadline = time.time() + timeout
     while time.time() < deadline:
         if proc.poll() is not None:
-            tail = _read_log_tail(log_path, 15)
-            raise RuntimeError(f"标注工具进程异常退出 (code={proc.returncode}):\n{tail}")
+            tail = _read_log_tail(log_path, 30)
+            logger.error(
+                f"[Annotation] process exited abnormally code={proc.returncode} "
+                f"user_id={user_id} project_id={project_id} port={port} log_path={log_path}"
+            )
+            raise RuntimeError(
+                f"标注工具进程异常退出 (code={proc.returncode})。"
+                f"\n日志文件：{log_path}\n最近日志：\n{tail}"
+            )
         if await is_healthy(annotation_url):
             return {
                 "port": port,
@@ -125,8 +134,16 @@ async def start_annotation_instance(user_id: int, project_id: int) -> dict:
         await asyncio.sleep(1)
 
     stop_pid(proc.pid)
-    tail = _read_log_tail(log_path, 15)
-    raise RuntimeError(f"标注工具启动超时:\n{tail}")
+    tail = _read_log_tail(log_path, 30)
+    logger.error(
+        f"[Annotation] startup timeout after {timeout}s, user_id={user_id} project_id={project_id} "
+        f"port={port} log_path={log_path}"
+    )
+    raise RuntimeError(
+        f"标注工具启动超时（已等待 {timeout} 秒，SAM3 模型加载较慢时可调大 ANNOTATION_STARTUP_TIMEOUT_SECONDS）。"
+        f"\n日志文件：{log_path}"
+        f"\n最近日志：\n{tail}"
+    )
 
 
 async def ensure_annotation_service(user_id: int, project_id: int) -> AnnotationService:

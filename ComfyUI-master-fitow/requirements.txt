@@ -23,6 +23,7 @@ SQLAlchemy
 av>=14.2.0
 comfy-kitchen>=0.2.7
 requests
+opencv-python
 
 # Google-Gemini 等 custom_nodes 依赖（若使用 Google Imagen 工作流需安装）
 google-genai>=1.51.0

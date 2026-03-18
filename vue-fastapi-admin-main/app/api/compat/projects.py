@@ -131,8 +131,9 @@ async def list_projects(
     for svc in await AnnotationService.filter(project_id__in=project_ids).all():
         ann_map[svc.project_id] = svc.status
 
-    def _output_dir_name(name: str) -> str:
-        return "".join(c if c.isalnum() or c in "-_ " else "_" for c in name).strip()
+    def _output_dir_name(project_id: int) -> str:
+        """项目输出目录名（唯一），使用 project_id 避免项目名冲突。"""
+        return f"p{project_id}"
 
     data = [
         {
@@ -146,7 +147,7 @@ async def list_projects(
             "generated_count": gen_counts.get(p.id, 0),
             "comfy_status": comfy_map.get(p.id, "stopped"),
             "annotation_status": ann_map.get(p.id, "stopped"),
-            "output_dir": _output_dir_name(p.name),
+            "output_dir": _output_dir_name(p.id),
             "create_time": _now_str(p.created_at),
             "update_time": _now_str(p.updated_at),
         }
@@ -267,10 +268,33 @@ async def open_annotation(project_id: int, request: Request):
     try:
         svc = await ensure_annotation_service(user_id=user_id, project_id=project_id)
     except Exception as e:  # noqa: BLE001
+        logger.error(
+            f"[Annotation] 启动失败 project_id={project_id} user_id={user_id}: {e}",
+            exc_info=True,
+        )
         return Fail(code=500, msg=f"启动标注服务失败：{e}")
 
     public_url = _get_public_comfy_url(port=int(svc.port), request=request)
     return Success(data=OpenAnnotationOut(annotation_url=public_url).model_dump())
+
+
+def _get_project_output_dir(project_id: int) -> str:
+    """项目输出目录名（唯一），使用 project_id 避免项目名冲突。"""
+    return f"p{project_id}"
+
+
+def _get_project_output_path(project_id: int, project_name: str, output_base: Path) -> Path:
+    """
+    获取项目输出目录路径。优先使用 p{project_id}（新规则），若不存在则回退到旧规则（项目名）以兼容历史数据。
+    """
+    dir_name = _get_project_output_dir(project_id)
+    new_path = output_base / dir_name
+    if new_path.exists():
+        return new_path
+    # 向后兼容：旧数据可能使用项目名作为目录
+    safe_name = "".join(c if c.isalnum() or c in "-_ " else "_" for c in project_name).strip()
+    old_path = output_base / safe_name
+    return old_path if old_path.exists() else new_path
 
 
 @router.get("/{project_id}/images", summary="列出项目生成图片", dependencies=[DependPermission])
@@ -279,11 +303,10 @@ async def list_project_images(project_id: int):
     if not project:
         return Fail(code=404, msg="项目不存在")
 
-    safe_name = "".join(c if c.isalnum() or c in "-_ " else "_" for c in project.name).strip()
     output_base = Path(settings.OUTPUT_BASE_DIR)
     if not output_base.is_absolute():
         output_base = Path(settings.BASE_DIR) / output_base
-    project_dir = output_base / safe_name
+    project_dir = _get_project_output_path(project_id, project.name, output_base)
 
     files = []
     if project_dir.exists():
@@ -296,7 +319,8 @@ async def list_project_images(project_id: int):
                     "size": f.stat().st_size,
                     "date": f.parent.name,
                 })
-    return Success(data={"project_name": project.name, "dir": safe_name, "files": files, "total": len(files)})
+    dir_for_url = project_dir.name  # 用于 /output/{dir}/ 的 URL 拼接
+    return Success(data={"project_name": project.name, "dir": dir_for_url, "files": files, "total": len(files)})
 
 
 @router.get("/{project_id}/browse", summary="浏览项目图片目录（HTML）")
@@ -308,15 +332,15 @@ async def browse_project_images(project_id: int):
     if not project:
         return HTMLResponse("<h3>项目不存在</h3>", status_code=404)
 
-    safe_name = "".join(c if c.isalnum() or c in "-_ " else "_" for c in project.name).strip()
     output_base = Path(settings.OUTPUT_BASE_DIR)
     if not output_base.is_absolute():
         output_base = Path(settings.BASE_DIR) / output_base
-    project_dir = output_base / safe_name
+    project_dir = _get_project_output_path(project_id, project.name, output_base)
 
     if not project_dir.exists():
-        return HTMLResponse(f"<h3>目录不存在：{safe_name}/</h3><p>该项目尚未生成任何图片。</p>")
+        return HTMLResponse(f"<h3>目录不存在：{project_dir.name}/</h3><p>该项目尚未生成任何图片。</p>")
 
+    dir_for_url = project_dir.name
     rows = []
     for sub in sorted(project_dir.iterdir(), reverse=True):
         if sub.is_dir():
@@ -325,7 +349,7 @@ async def browse_project_images(project_id: int):
                 if f.is_file() and f.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"):
                     size_kb = f.stat().st_size / 1024
                     rel = f.relative_to(project_dir)
-                    url = f"/output/{safe_name}/{rel}"
+                    url = f"/output/{dir_for_url}/{rel}"
                     rows.append(
                         f'<tr><td>{sub.name}</td>'
                         f'<td><a href="{url}" target="_blank">{f.name}</a></td>'

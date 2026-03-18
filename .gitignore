@@ -1,10 +1,10 @@
-*.zip
 *.7z
 *.tar.gz
 *.rar
 runtime/
 *.log
 .env
+.venv/
 node_modules/
 __pycache__/
 .DS_Store

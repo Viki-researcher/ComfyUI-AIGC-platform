@@ -9,6 +9,7 @@ from transformers import (
     logging as transformers_logging
 )
 from .schemas import ObjectState, SelectorInput
+from .config import get_model_path
 from typing import Optional, Any
 
 # Suppress specific warnings
@@ -28,28 +29,36 @@ def load_models():
     global _IMG_MODEL, _IMG_PROCESSOR, _TRK_MODEL, _TRK_PROCESSOR
     if _IMG_MODEL is not None: return
 
-    print(f"🖥️  Using compute device: {device}")
-    print("⏳ Loading SAM3 Models...")
-    
-    # Use local_files_only=True to skip network checks (faster, more consistent)
+    model_path = get_model_path()
+    is_local = model_path != "facebook/sam3"
+    # 优先本地：本地路径或 Hub 缓存，避免不必要的网络请求
     local_only = True
+
+    print(f"🖥️  Using compute device: {device}")
+    print(f"⏳ Loading SAM3 Models from: {model_path}")
     
     try:
         # 1. Selector (Sam3Model)
-        _IMG_MODEL = Sam3Model.from_pretrained("facebook/sam3", local_files_only=local_only).to(device)
-        _IMG_PROCESSOR = Sam3Processor.from_pretrained("facebook/sam3", local_files_only=local_only)
+        _IMG_MODEL = Sam3Model.from_pretrained(model_path, local_files_only=local_only).to(device)
+        _IMG_PROCESSOR = Sam3Processor.from_pretrained(model_path, local_files_only=local_only)
         
         # 2. Refiner (Sam3TrackerModel)
-        _TRK_MODEL = Sam3TrackerModel.from_pretrained("facebook/sam3", local_files_only=local_only).to(device)
-        _TRK_PROCESSOR = Sam3TrackerProcessor.from_pretrained("facebook/sam3", local_files_only=local_only)
+        _TRK_MODEL = Sam3TrackerModel.from_pretrained(model_path, local_files_only=local_only).to(device)
+        _TRK_PROCESSOR = Sam3TrackerProcessor.from_pretrained(model_path, local_files_only=local_only)
         
     except OSError:
-        # Models not cached, need to download first
+        if is_local:
+            raise OSError(
+                f"Failed to load SAM3 model from local path: {model_path}\n"
+                f"Ensure the directory contains HuggingFace format (config.json, preprocessor_config.json, etc.).\n"
+                f"See ANNOTATION_SAM3_MODEL_PATH in .env.platform or vue-fastapi-admin-main/.env"
+            )
+        # Hub model not cached, need to download first
         print(f"⚠️  Models not in cache, downloading... (this only happens once)")
-        _IMG_MODEL = Sam3Model.from_pretrained("facebook/sam3").to(device)
-        _IMG_PROCESSOR = Sam3Processor.from_pretrained("facebook/sam3")
-        _TRK_MODEL = Sam3TrackerModel.from_pretrained("facebook/sam3").to(device)
-        _TRK_PROCESSOR = Sam3TrackerProcessor.from_pretrained("facebook/sam3")
+        _IMG_MODEL = Sam3Model.from_pretrained(model_path).to(device)
+        _IMG_PROCESSOR = Sam3Processor.from_pretrained(model_path)
+        _TRK_MODEL = Sam3TrackerModel.from_pretrained(model_path).to(device)
+        _TRK_PROCESSOR = Sam3TrackerProcessor.from_pretrained(model_path)
     
     print(f"✅ All models loaded!")
 

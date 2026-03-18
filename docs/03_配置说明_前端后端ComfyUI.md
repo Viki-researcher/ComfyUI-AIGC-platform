@@ -95,9 +95,14 @@
 - `ANNOTATION_LISTEN`：Gradio 监听地址（`127.0.0.1` 或 `0.0.0.0`）
 - `ANNOTATION_PORT_RANGE=7860-7899`：标注工具端口池
 - `ANNOTATION_LOG_DIR`：标注工具日志目录（默认 `./runtime/annotation_logs`）
-- `ANNOTATION_STARTUP_TIMEOUT_SECONDS=60`
+- `ANNOTATION_STARTUP_TIMEOUT_SECONDS=300`：SAM3 模型加载较慢，建议 300 秒（5 分钟）以上
+- `ANNOTATION_SAM3_MODEL_PATH`：SAM3 模型本地路径（HuggingFace 格式目录）。留空则使用 `facebook/sam3`（Hub 或缓存）
 
-> 注意：SAM3 模型为 HuggingFace gated model，需设置 `HF_TOKEN` 环境变量并申请 `facebook/sam3` 访问权限才能使用推理功能。未配置时 Gradio UI 仍可正常启动。
+> 注意：SAM3 模型为 HuggingFace gated model，需设置 `HF_TOKEN` 环境变量并申请 `facebook/sam3` 访问权限才能使用推理功能。若配置 `ANNOTATION_SAM3_MODEL_PATH` 指向本地 HuggingFace 格式模型，则无需网络。未配置时 Gradio UI 仍可正常启动。
+
+**启动失败时日志位置**：
+- **标注工具进程日志**：`vue-fastapi-admin-main/runtime/annotation_logs/annotation_u{用户ID}_p{项目ID}_{端口}.log`（模型加载、Gradio 启动等输出）
+- **后端错误日志**：`vue-fastapi-admin-main/runtime/backend_error.log`（ERROR 级别，含标注/ComfyUI 启动失败等）；同时输出到控制台 stdout
 
 ---
 

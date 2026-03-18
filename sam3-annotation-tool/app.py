@@ -22,7 +22,8 @@ try:
     load_models()
 except Exception as e:
     print(f"⚠️  Model loading skipped: {e}")
-    print("   Set HF_TOKEN env var and ensure access to facebook/sam3 to enable inference.")
+    print("   Options: 1) Set ANNOTATION_SAM3_MODEL_PATH in .env.platform (platform config)")
+    print("            2) Set SAM3_MODEL_PATH env var  3) Use facebook/sam3 from Hub (HF_TOKEN if gated)")
 
 app_theme = CustomBlueTheme()
 
